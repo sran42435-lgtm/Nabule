@@ -169,3 +169,4 @@ func safeStr(p *string) string {
 	}
 	return *p
 }
+scraper_go.go
