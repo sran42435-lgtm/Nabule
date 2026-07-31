@@ -17,6 +17,8 @@ CHANGELOG v2.0:
 - Replaced static payload DB dengan dynamic generation
 - Feedback loop untuk model improvement
 - Context-aware payload evolution
+- FIX: _normalize_finding() untuk bridge File 1 → VULN-BOT format
+- FIX: process_findings() dengan confidence boost untuk high severity
 """
 
 import os
@@ -54,7 +56,7 @@ VULN_BOT_CONFIG = {
     # --- AI Payload Generation ---
     "ai_generation_enabled": True,
     "ai_methods": ["grammar", "genetic", "markov", "mutation", "fuzz"],
-    "max_payloads_per_vuln": 30,        # Naik dari 10 karena AI-generated
+    "max_payloads_per_vuln": 30,
     "payload_timeout": 30,
     "payload_delay_min": 1.0,
     "payload_delay_max": 3.0,
@@ -268,7 +270,7 @@ class PayloadType(Enum):
 class GeneratedPayload:
     payload: str
     payload_type: str
-    generation_method: str  # grammar, genetic, markov, mutation, fuzz
+    generation_method: str
     confidence: float
     metadata: Dict[str, Any] = field(default_factory=dict)
     encoding: Optional[str] = None
@@ -276,12 +278,10 @@ class GeneratedPayload:
 
 
 # ============================================================
-# â–ˆâ–ˆ AI-1: GRAMMAR-BASED PAYLOAD GENERATOR                  â–ˆâ–ˆ
+# ██ AI-1: GRAMMAR-BASED PAYLOAD GENERATOR                  ██
 # ============================================================
 class GrammarPayloadGenerator:
-    """
-    Generate payloads menggunakan Context-Free Grammar (BNF-like rules).
-    """
+    """Generate payloads menggunakan Context-Free Grammar (BNF-like rules)."""
     
     def __init__(self):
         self.grammars = self._init_grammars()
@@ -437,12 +437,10 @@ class GrammarPayloadGenerator:
 
 
 # ============================================================
-# â–ˆâ–ˆ AI-2: GENETIC ALGORITHM PAYLOAD EVOLVER                â–ˆâ–ˆ
+# ██ AI-2: GENETIC ALGORITHM PAYLOAD EVOLVER                ██
 # ============================================================
 class GeneticPayloadEvolver:
-    """
-    Evolve payloads menggunakan genetic algorithm.
-    """
+    """Evolve payloads menggunakan genetic algorithm."""
     
     def __init__(self):
         self.config = VULN_BOT_CONFIG
@@ -545,12 +543,10 @@ class GeneticPayloadEvolver:
 
 
 # ============================================================
-# â–ˆâ–ˆ AI-3: MARKOV CHAIN PAYLOAD GENERATOR                   â–ˆâ–ˆ
+# ██ AI-3: MARKOV CHAIN PAYLOAD GENERATOR                   ██
 # ============================================================
 class MarkovPayloadGenerator:
-    """
-    Generate payloads menggunakan Markov Chain.
-    """
+    """Generate payloads menggunakan Markov Chain."""
     
     def __init__(self, order: int = None):
         self.order = order or VULN_BOT_CONFIG["markov_order"]
@@ -648,12 +644,10 @@ class MarkovPayloadGenerator:
 
 
 # ============================================================
-# â–ˆâ–ˆ AI-4: CONTEXT-AWARE PAYLOAD MUTATOR                    â–ˆâ–ˆ
+# ██ AI-4: CONTEXT-AWARE PAYLOAD MUTATOR                    ██
 # ============================================================
 class ContextAwareMutator:
-    """
-    Mutate payloads berdasarkan context.
-    """
+    """Mutate payloads berdasarkan context."""
     
     def __init__(self):
         self.mutation_rules = self._init_mutation_rules()
@@ -764,12 +758,10 @@ class ContextAwareMutator:
 
 
 # ============================================================
-# â–ˆâ–ˆ AI-5: NEURAL NETWORK PAYLOAD SCORER                    â–ˆâ–ˆ
+# ██ AI-5: NEURAL NETWORK PAYLOAD SCORER                    ██
 # ============================================================
 class NeuralPayloadScorer:
-    """
-    Score payloads menggunakan neural network.
-    """
+    """Score payloads menggunakan neural network."""
     
     def __init__(self):
         self.model = None
@@ -872,12 +864,10 @@ class NeuralPayloadScorer:
 
 
 # ============================================================
-# â–ˆâ–ˆ AI-6: SMART FUZZING ENGINE                             â–ˆâ–ˆ
+# ██ AI-6: SMART FUZZING ENGINE                             ██
 # ============================================================
 class SmartFuzzingEngine:
-    """
-    Smart fuzzing dengan heuristics.
-    """
+    """Smart fuzzing dengan heuristics."""
     
     def __init__(self):
         self.fuzz_vectors = self._init_fuzz_vectors()
@@ -940,12 +930,10 @@ class SmartFuzzingEngine:
 
 
 # ============================================================
-# â–ˆâ–ˆ AI ORCHESTRATOR: MAIN AI PAYLOAD GENERATOR             â–ˆâ–ˆ
+# ██ AI ORCHESTRATOR: MAIN AI PAYLOAD GENERATOR             ██
 # ============================================================
 class AIPayloadGenerator:
-    """
-    Main orchestrator yang combine semua AI techniques.
-    """
+    """Main orchestrator yang combine semua AI techniques."""
     
     def __init__(self):
         self.grammar_gen = GrammarPayloadGenerator()
@@ -977,9 +965,7 @@ class AIPayloadGenerator:
         count: int = 50,
         methods: List[str] = None
     ) -> List[GeneratedPayload]:
-        """
-        Generate payloads menggunakan multiple AI techniques.
-        """
+        """Generate payloads menggunakan multiple AI techniques."""
         context = context or {}
         methods = methods or VULN_BOT_CONFIG["ai_methods"]
         
@@ -1046,7 +1032,7 @@ class AIPayloadGenerator:
                         confidence=0.75,
                         metadata={"source": "context_mutation", "base": base}
                     ))
-            self.generation_stats["mutation"] += sum(len(mutated) for _ in base_payloads)
+            self.generation_stats["mutation"] += sum(len(self.context_mutator.mutate(bp, context)) for bp in base_payloads)
         
         # 5. Smart fuzzing
         if "fuzz" in methods and all_payloads:
@@ -1097,9 +1083,7 @@ class AIPayloadGenerator:
 # ADAPTIVE LEARNING MODEL
 # ============================================================
 class AdaptiveLearningModel:
-    """
-    Model pembelajaran adaptif untuk pattern recognition.
-    """
+    """Model pembelajaran adaptif untuk pattern recognition."""
     
     def __init__(self, config):
         self.config = config
@@ -1668,18 +1652,16 @@ fi
 
 
 # ============================================================
-# VULN-BOT MAIN ENGINE (v2.0 with AI)
+# VULN-BOT MAIN ENGINE (v2.0 with AI - FIXED)
 # ============================================================
 class VulnBotEngine:
-    """
-    Main engine VULN-BOT v2.0 dengan AI Payload Generator.
-    """
+    """Main engine VULN-BOT v2.0 dengan AI Payload Generator."""
     
     def __init__(self, config=None):
         self.config = config or VULN_BOT_CONFIG
         self.adaptive_model = AdaptiveLearningModel(self.config)
         self.cve_db = CVEDatabase(self.config)
-        self.ai_generator = AIPayloadGenerator()  # NEW: AI Payload Generator
+        self.ai_generator = AIPayloadGenerator()
         self.stealth = StealthLayer(self.config)
         self.sandbox = SandboxExecutor(self.config)
         self.poc_gen = PoCGenerator(self.config)
@@ -1712,29 +1694,175 @@ class VulnBotEngine:
             "privilege_escalation": PayloadType.PRIV_ESC,
             "csrf": PayloadType.CSRF,
             "auth_bypass": PayloadType.AUTH_BYPASS,
+            "unknown": PayloadType.XSS,  # Default fallback untuk unknown
         }
-        return mapping.get(vuln_type_str.lower(), PayloadType.SQLI)
+        return mapping.get(vuln_type_str.lower(), PayloadType.XSS)
+    
+    # ============================================================
+    # NORMALIZE FINDING (FIX: bridge File 1 format → VULN-BOT format)
+    # ============================================================
+    def _normalize_finding(self, finding):
+        """
+        Normalize finding dari format File 1 ke format VULN-BOT.
+        File 1 format: {type, category, name, severity, url, parameter, evidence, ...}
+        VULN-BOT format: {vuln_type, url, confidence, context, technologies, waf_detected, ...}
+        """
+        normalized = dict(finding)
+        
+        # 1. Map vuln_type dari name/category/evidence
+        if "vuln_type" not in normalized or not normalized.get("vuln_type"):
+            name = normalized.get("name", "").lower()
+            category = normalized.get("category", "").lower()
+            evidence = normalized.get("evidence", "").lower()
+            
+            vuln_type = "unknown"
+            
+            if any(kw in name for kw in ["cross site scripting", "xss", "reflected", "dom based"]):
+                vuln_type = "xss"
+            elif any(kw in name for kw in ["sql injection", "sqli", "sql", "database"]):
+                vuln_type = "sqli"
+            elif any(kw in name for kw in ["remote code", "rce", "code execution", "command injection", "cmdi"]):
+                vuln_type = "rce"
+            elif any(kw in name for kw in ["local file", "lfi", "path traversal", "directory traversal", "exposed path"]):
+                vuln_type = "lfi"
+            elif any(kw in name for kw in ["ssrf", "server side request"]):
+                vuln_type = "ssrf"
+            elif any(kw in name for kw in ["ssti", "template injection", "server side template"]):
+                vuln_type = "ssti"
+            elif any(kw in name for kw in ["xxe", "xml external"]):
+                vuln_type = "xxe"
+            elif any(kw in name for kw in ["crlf", "header injection", "response splitting"]):
+                vuln_type = "crlf"
+            elif any(kw in name for kw in ["open redirect", "redirect"]):
+                vuln_type = "open_redirect"
+            elif any(kw in name for kw in ["idor", "insecure direct object"]):
+                vuln_type = "idor"
+            elif any(kw in name for kw in ["csrf", "cross site request"]):
+                vuln_type = "csrf"
+            elif any(kw in name for kw in ["authentication bypass", "auth bypass", "broken authentication"]):
+                vuln_type = "auth_bypass"
+            elif any(kw in name for kw in ["privilege escalation", "priv esc", "priv_esc"]):
+                vuln_type = "priv_esc"
+            elif any(kw in name for kw in ["information disclosure", "sensitive", "exposed", "credential"]):
+                vuln_type = "xss"
+            elif category == "ssl":
+                vuln_type = "ssrf"
+            
+            # Cek evidence untuk fallback
+            if vuln_type == "unknown":
+                if any(kw in evidence for kw in ["<script", "javascript:", "onerror", "onload"]):
+                    vuln_type = "xss"
+                elif any(kw in evidence for kw in ["sql syntax", "mysql", "ora-", "postgresql"]):
+                    vuln_type = "sqli"
+                elif any(kw in evidence for kw in ["root:x:", "etc/passwd"]):
+                    vuln_type = "lfi"
+                elif any(kw in evidence for kw in ["uid=", "whoami", "command"]):
+                    vuln_type = "rce"
+            
+            normalized["vuln_type"] = vuln_type
+        
+        # 2. Set confidence dari severity
+        if "confidence" not in normalized or not normalized.get("confidence"):
+            severity = normalized.get("severity", "").lower()
+            severity_map = {
+                "critical": 0.95,
+                "high": 0.85,
+                "medium": 0.75,
+                "low": 0.60,
+                "informational": 0.40,
+                "info": 0.40,
+            }
+            normalized["confidence"] = severity_map.get(severity, 0.70)
+        
+        # 3. Build context dari parameter
+        if "context" not in normalized or not normalized.get("context"):
+            param = normalized.get("parameter", "")
+            normalized["context"] = {
+                "parameter": param if param else "test",
+                "param_type": "url",
+            }
+        elif isinstance(normalized["context"], dict):
+            if not normalized["context"].get("parameter"):
+                normalized["context"]["parameter"] = normalized.get("parameter", "test") or "test"
+            if not normalized["context"].get("param_type"):
+                normalized["context"]["param_type"] = "url"
+        
+        # 4. Technologies
+        if "technologies" not in normalized:
+            normalized["technologies"] = []
+        
+        # 5. WAF detected
+        if "waf_detected" not in normalized:
+            normalized["waf_detected"] = False
+        
+        # 6. Failed payloads
+        if "failed_payloads" not in normalized:
+            normalized["failed_payloads"] = []
+        
+        return normalized
     
     def process_findings(self, findings):
         """
         Process findings dari scanner dan generate PoC menggunakan AI.
+        FIXED: Normalize findings dari berbagai format.
         """
         print(f"\n\033[36m{'='*58}")
         print(f"  VULN-BOT v2.0: Processing {len(findings)} findings")
         print(f"  Mode: AI-Powered Payload Generation")
         print(f"{'='*58}\033[0m")
         
+        # Normalize semua findings
+        normalized_findings = []
+        for f in findings:
+            nf = self._normalize_finding(f)
+            normalized_findings.append(nf)
+        
+        # Filter: hanya process findings dengan vuln_type yang bisa di-exploit
+        exploitable_types = {"xss", "sqli", "lfi", "rce", "ssrf", "xxe", "ssti", "cmdi", 
+                            "open_redirect", "crlf", "idor"}
+        
+        processable = []
+        skipped = 0
+        for nf in normalized_findings:
+            vt = nf.get("vuln_type", "unknown").lower()
+            if vt in exploitable_types:
+                processable.append(nf)
+            else:
+                skipped += 1
+        
+        if skipped > 0:
+            print(f"  [*] {skipped} findings skipped (non-exploitable type)")
+        
+        if not processable:
+            print(f"  [!] No exploitable findings to process")
+            processable = normalized_findings
+        
+        print(f"  [*] {len(processable)} findings to process\n")
+        
         results = []
         
-        for i, finding in enumerate(findings, 1):
-            print(f"\n\033[33m[{i}/{len(findings)}] Processing: {finding.get('vuln_type', 'unknown')}\033[0m")
+        for i, finding in enumerate(processable, 1):
+            vuln_type_str = finding.get("vuln_type", "unknown")
+            print(f"\n\033[33m[{i}/{len(processable)}] Processing: {vuln_type_str}\033[0m")
+            print(f"  Finding: {finding.get('name', 'N/A')}")
             
             # Step 1: Adaptive prediction
             confidence = self.adaptive_model.predict(finding)
-            print(f"  Confidence: {confidence:.2%}")
+            finding_confidence = finding.get("confidence", 0.5)
+            effective_confidence = max(confidence, finding_confidence)
+            print(f"  Confidence: {effective_confidence:.2%} (adaptive: {confidence:.2%}, finding: {finding_confidence:.2%})")
             
-            if confidence < self.config["confidence_threshold"]:
-                print(f"  [SKIP] Below threshold ({self.config['confidence_threshold']:.2%})")
+            # FIX: Boost confidence untuk high severity
+            severity = finding.get("severity", "").lower()
+            if severity in ["critical", "high"]:
+                if effective_confidence < 0.50:
+                    effective_confidence = 0.80
+                    print(f"  [*] High severity → boosted confidence to 80%")
+            
+            # FIX: Lower effective threshold (60%)
+            effective_threshold = self.config["confidence_threshold"] * 0.8
+            if effective_confidence < effective_threshold:
+                print(f"  [SKIP] Below threshold ({effective_threshold:.2%})")
                 continue
             
             # Step 2: CVE matching
@@ -1744,9 +1872,8 @@ class VulnBotEngine:
                 finding["cve_matches"] = cve_matches
             
             # Step 3: Generate payloads dengan AI
-            vuln_type = self._map_vuln_type(finding.get("vuln_type", "sqli"))
+            vuln_type = self._map_vuln_type(vuln_type_str)
             
-            # Build context untuk AI generator
             ai_context = {
                 "waf_detected": finding.get("waf_detected", False),
                 "tech_stack": finding.get("technologies", []),
@@ -1770,64 +1897,78 @@ class VulnBotEngine:
             for method, count in method_counts.items():
                 print(f"    - {method}: {count} payloads")
             
-            # Step 4: Test payloads (dengan stealth & sandbox)
-            validated_payloads = []
-            test_count = min(10, len(ai_payloads))  # Test top 10
+            # Show top 5 payloads
+            if ai_payloads:
+                print(f"\n  [*] Top 5 AI-Generated Payloads:")
+                for j, p in enumerate(ai_payloads[:5], 1):
+                    print(f"    {j}. [{p.generation_method:8}] conf={p.confidence:.2f} ctx={p.context_score:.2f}")
+                    print(f"       {p.payload[:70]}")
             
-            for payload_obj in ai_payloads[:test_count]:
-                self.stealth.wait()
+            # Step 4: Test payloads (jika ada URL target)
+            validated_payloads = []
+            target_url = finding.get("url", "")
+            
+            if target_url and target_url.startswith("http"):
+                test_count = min(5, len(ai_payloads))
                 
-                print(f"    [*] Testing [{payload_obj.generation_method}] {payload_obj.payload[:50]}...")
+                print(f"\n  [*] Testing top {test_count} payloads against target...")
                 
-                param = finding.get("context", {}).get("parameter", "test")
-                result = self.sandbox.execute(
-                    payload_obj.payload,
-                    finding.get("url", ""),
-                    param=param,
-                    timeout=self.config["payload_timeout"]
-                )
-                
-                if result["success"]:
-                    print(f"    [OK] Executed (status: {result['status_code']}, {result['response_time_ms']}ms)")
-                    payload_obj.metadata["execution_result"] = result
-                    validated_payloads.append(payload_obj)
+                for payload_obj in ai_payloads[:test_count]:
+                    self.stealth.wait()
                     
-                    # Feedback loop: train model dengan successful payload
-                    self.ai_generator.add_training_data(
+                    print(f"    [*] Testing [{payload_obj.generation_method}] {payload_obj.payload[:50]}...")
+                    
+                    param = finding.get("context", {}).get("parameter", "test")
+                    result = self.sandbox.execute(
                         payload_obj.payload,
-                        vuln_type.value,
-                        success=True
+                        target_url,
+                        param=param,
+                        timeout=self.config["payload_timeout"]
                     )
-                else:
-                    print(f"    [X] Failed: {result.get('error', 'unknown')}")
-                    # Feedback loop: train dengan failed payload
-                    self.ai_generator.add_training_data(
-                        payload_obj.payload,
-                        vuln_type.value,
-                        success=False
-                    )
-                
-                time.sleep(random.uniform(
-                    self.config["payload_delay_min"],
-                    self.config["payload_delay_max"]
-                ))
+                    
+                    if result["success"]:
+                        print(f"    [OK] Executed (status: {result['status_code']}, {result['response_time_ms']}ms)")
+                        payload_obj.metadata["execution_result"] = result
+                        validated_payloads.append(payload_obj)
+                        
+                        self.ai_generator.add_training_data(
+                            payload_obj.payload,
+                            vuln_type.value,
+                            success=True
+                        )
+                    else:
+                        print(f"    [X] Failed: {result.get('error', 'unknown')}")
+                        self.ai_generator.add_training_data(
+                            payload_obj.payload,
+                            vuln_type.value,
+                            success=False
+                        )
+                    
+                    time.sleep(random.uniform(
+                        self.config["payload_delay_min"],
+                        self.config["payload_delay_max"]
+                    ))
+            else:
+                print(f"\n  [*] No target URL - using AI payloads without testing")
+                validated_payloads = ai_payloads[:5]
             
             # Step 5: Generate PoC
-            if validated_payloads:
-                # Pilih payload terbaik (highest context_score)
-                best_payload = max(validated_payloads, key=lambda p: p.context_score)
+            if validated_payloads or ai_payloads:
+                candidates = validated_payloads if validated_payloads else ai_payloads
+                best_payload = max(candidates, key=lambda p: p.context_score + p.confidence)
+                
                 poc_files = self.poc_gen.save(finding, best_payload)
                 
-                print(f"  [OK] Generated {len(poc_files)} PoC files (best: {best_payload.generation_method}):")
+                print(f"\n  [OK] Generated {len(poc_files)} PoC files (best: {best_payload.generation_method}):")
                 for poc_file in poc_files:
                     print(f"    - {poc_file}")
                 
                 results.append({
                     "finding": finding,
-                    "confidence": confidence,
+                    "confidence": effective_confidence,
                     "cve_matches": cve_matches,
                     "payloads_generated": len(ai_payloads),
-                    "payloads_tested": test_count,
+                    "payloads_tested": len(validated_payloads) if target_url else 0,
                     "payloads_validated": len(validated_payloads),
                     "best_payload": {
                         "payload": best_payload.payload,
@@ -1839,25 +1980,36 @@ class VulnBotEngine:
                     "method_breakdown": dict(method_counts),
                 })
             else:
-                print(f"  [SKIP] No payloads validated")
+                print(f"  [SKIP] No payloads generated")
         
         # Summary
         print(f"\n\033[32m{'='*58}")
         print(f"  VULN-BOT v2.0 COMPLETE")
         print(f"{'='*58}\033[0m")
-        print(f"  Total findings processed: {len(findings)}")
+        print(f"  Total findings processed: {len(processable)}")
         print(f"  PoC generated: {len(results)}")
         print(f"  Output directory: {self.config['poc_output_dir']}")
         
         # AI Stats
         ai_stats = self.ai_generator.get_stats()
+        gen_stats = ai_stats.get("generation_stats", {})
         print(f"\n  \033[36m[AI Generation Stats]\033[0m")
-        print(f"    Grammar payloads:  {ai_stats['generation_stats'].get('grammar', 0)}")
-        print(f"    Genetic evolved:   {ai_stats['generation_stats'].get('genetic', 0)}")
-        print(f"    Markov generated:  {ai_stats['generation_stats'].get('markov', 0)}")
-        print(f"    Mutations:         {ai_stats['generation_stats'].get('mutation', 0)}")
-        print(f"    Fuzzed:            {ai_stats['generation_stats'].get('fuzz', 0)}")
-        print(f"    Neural trained:    {ai_stats['neural_model_trained']}")
+        print(f"    Grammar payloads:  {gen_stats.get('grammar', 0)}")
+        print(f"    Genetic evolved:   {gen_stats.get('genetic', 0)}")
+        print(f"    Markov generated:  {gen_stats.get('markov', 0)}")
+        print(f"    Mutations:         {gen_stats.get('mutation', 0)}")
+        print(f"    Fuzzed:            {gen_stats.get('fuzz', 0)}")
+        print(f"    Neural trained:    {ai_stats.get('neural_model_trained', False)}")
+        print(f"    Total generated:   {sum(gen_stats.values())}")
+        
+        # Per-finding summary
+        if results:
+            print(f"\n  \033[33m[Per-Finding Summary]\033[0m")
+            for r in results:
+                vt = r['finding'].get('vuln_type', 'unknown')
+                print(f"    [{vt.upper()}] {r['payloads_generated']} payloads | "
+                      f"Best: {r['best_payload']['method']} | "
+                      f"PoC: {len(r['poc_files'])} files")
         
         return results
     
@@ -1903,34 +2055,48 @@ if __name__ == "__main__":
     print("  Indigo VULN-BOT v2.0 - Standalone Mode (AI-Powered)")
     print("=" * 58 + "\033[0m\n")
     
-    test_findings = [
+    # Test dengan format File 1 (tanpa vuln_type)
+    test_findings_file1_format = [
         {
-            "vuln_type": "sqli",
-            "url": "http://testphp.vulnweb.com/listproducts.php?cat=1",
-            "confidence": 0.85,
-            "evidence": "sql syntax error",
-            "context": {
-                "parameter": "cat",
-                "param_type": "url"
-            },
-            "technologies": ["mysql", "php"],
-            "waf_detected": False,
+            "type": "vulnerability",
+            "category": "zap",
+            "name": "Cross Site Scripting (Reflected)",
+            "severity": "High",
+            "url": "http://testphp.vulnweb.com/search.php?test=query",
+            "parameter": "test",
+            "evidence": "<script>alert",
+            "description": "Reflected XSS found",
+            "solution": "Encode output",
+            "cwe_id": "CWE-79",
+            "wasc_id": "WASC-8",
         },
         {
-            "vuln_type": "xss",
-            "url": "http://testphp.vulnweb.com/search.php?test=query",
-            "confidence": 0.90,
-            "evidence": "<script>alert",
-            "context": {
-                "parameter": "test",
-                "param_type": "url"
-            },
-            "technologies": ["php"],
-            "waf_detected": False,
-        }
+            "type": "vulnerability",
+            "category": "zap",
+            "name": "SQL Injection",
+            "severity": "High",
+            "url": "http://testphp.vulnweb.com/listproducts.php?cat=1",
+            "parameter": "cat",
+            "evidence": "sql syntax error",
+            "description": "SQL injection detected",
+            "solution": "Use parameterized queries",
+            "cwe_id": "CWE-89",
+        },
+        {
+            "type": "sensitive_data",
+            "category": "bs4",
+            "name": "Exposed Path: /.env",
+            "severity": "High",
+            "url": "http://testphp.vulnweb.com/.env",
+            "parameter": "",
+            "evidence": "Status: 200, Size: 450",
+            "description": "Sensitive path accessible",
+            "solution": "Restrict access",
+            "cwe_id": "CWE-200",
+        },
     ]
     
-    results = run_vuln_bot(test_findings)
+    results = run_vuln_bot(test_findings_file1_format)
     
     print(f"\n\nGenerated {len(results)} PoC(s)")
     for result in results:
