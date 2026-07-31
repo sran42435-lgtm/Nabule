@@ -1,19 +1,13 @@
 #!/usr/bin/env python3
 """
-Indigo SCR v4.3 - Indigo Security Crawler & Reconnaissance
+Indigo SCR v4.4 - Indigo Security Crawler & Reconnaissance
 6 Deep Scanning Engines: NMAP + DNS + SSL + WAF + ZAP + BS4
-v4.1 FULL FEATURES + v4.2 ERROR FIXES + v4.3 VULN-BOT INTEGRATION
+v4.4 - BUGFIX: domain/ts NameError di main()
 
-CHANGELOG v4.3:
-- ensure_str(): fix tuple/bytes/dict → string
-- safe_join(): fix "sequence item 0: expected str" 
-- safe_call(): fix "'str' object is not callable"
-- WAF dynamic API: fix "'WAFW00F' has no attribute 'identwaf'"
-- DNS resolve_dns(): fix unhandled DNS exceptions
-- json.dump default=ensure_str: fix serialization
-- VULN-BOT integration: AI payload generation after scan
-- FIX: ZAPv2 object has no attribute 'technology' error
-- NEW ASCII ART BANNER
+CHANGELOG v4.4:
+- FIX: NameError 'domain' is not defined di main()
+- FIX: NameError 'ts' is not defined di main()
+- Semua fix v4.3 tetap included (ZAPv2 technology, ensure_str, dll)
 """
 
 import os
@@ -64,10 +58,10 @@ ENGINE_STATUS = {
 }
 
 # ============================================================
-# UTILITY HELPERS - Fix tuple/str/join errors
+# UTILITY HELPERS
 # ============================================================
 def ensure_str(val, fallback=""):
-    """Konversi APAPUN ke string dengan aman (tuple, bytes, dict, None)."""
+    """Konversi APAPUN ke string dengan aman."""
     if val is None:
         return fallback
     if isinstance(val, bytes):
@@ -97,7 +91,7 @@ def safe_join(iterable, sep=", ", fallback=""):
         return fallback
 
 def safe_call(func, *args, fallback=None, **kwargs):
-    """Panggil fungsi/method dengan aman. Handle property vs callable."""
+    """Panggil fungsi/method dengan aman."""
     try:
         if callable(func):
             return func(*args, **kwargs)
@@ -549,7 +543,7 @@ def import_all_dependencies():
     import psutil as _p; psutil = _p
     _I(autoreset=True)
 
-    # ZAP import - coba kedua kemungkinan
+    # ZAP import
     ZAPv2 = None
     try:
         from zapv2 import ZAPv2 as _Z
@@ -571,7 +565,7 @@ def import_all_dependencies():
     logger.info("  [OK] All modules loaded")
 
 # ============================================================
-# BANNER: NEW ASCII ART BANNER
+# BANNER
 # ============================================================
 def show_banner():
     os.system('cls' if os.name == 'nt' else 'clear')
@@ -597,7 +591,6 @@ def show_banner():
             active.append(eng.upper())
     active_str = safe_join(sorted(set(active)), " + ", "BS4")
 
-    # New ASCII Art Banner
     banner_lines = [
         f"{RED_B} _)             | _)                                  ",
         f"  |  __ \\    _` |  |   _` |   _ \\     __|   __|   __| ",
@@ -609,7 +602,7 @@ def show_banner():
         f"",
         f"{C}[*] Active Engines : {W}{active_str}{R}",
         f"{C}[*] Accept         : {W}URL / Domain / IP Address{R}",
-        f"{Y}[*] Version        : {W}4.3{R}",
+        f"{Y}[*] Version        : {W}4.4{R}",
         f"{C}[*] Mode           : {W}{mode} (ZAP: {zi}){R}",
         f"",
         f"{RED_B}{'='*58}{R}",
@@ -669,7 +662,7 @@ def nmap_scan_engine(target_url):
 
     nm = nmap_lib.PortScanner()
 
-    # 1. Port scan + service version
+    # 1. Port scan
     print(f"\033[33m[*] [1/4] Scanning ports + service detection...\033[0m")
     try:
         nm.scan(hostname, arguments='-sV -sC --top-ports 1000 -T4 --max-retries 2 --host-timeout 120s')
@@ -755,7 +748,7 @@ def nmap_scan_engine(target_url):
     return results
 
 # ============================================================
-# ENGINE 2: DNS RECON (FULL v4.1 + resolve_dns fix)
+# ENGINE 2: DNS RECON
 # ============================================================
 def dns_recon_engine(target_url):
     results = {
@@ -787,7 +780,6 @@ def dns_recon_engine(target_url):
     if domain.startswith('www.'):
         domain = domain[4:]
 
-    # Helper untuk resolve DNS dengan proper error handling (FIX)
     def resolve_dns(d, rdtype, timeout=10):
         try:
             resolver = dns.resolver.Resolver()
@@ -948,7 +940,7 @@ def dns_recon_engine(target_url):
     return results
 
 # ============================================================
-# ENGINE 3: SSL/TLS (FULL v4.1)
+# ENGINE 3: SSL/TLS
 # ============================================================
 def ssl_analysis_engine(target_url):
     results = {
@@ -1137,7 +1129,7 @@ def ssl_analysis_engine(target_url):
     return results
 
 # ============================================================
-# ENGINE 4: WAF DETECTION (FULL v4.1 + dynamic API fix)
+# ENGINE 4: WAF DETECTION
 # ============================================================
 def waf_detect_engine(target_url):
     results = {
@@ -1148,14 +1140,13 @@ def waf_detect_engine(target_url):
     print(f"  [WAF ENGINE] Web Application Firewall Detection")
     print(f"{'='*58}\033[0m")
 
-    # Method 1: wafw00f (dynamic API detection - FIX)
+    # Method 1: wafw00f
     print(f"\033[33m[*] [1/2] wafw00f detection...\033[0m")
     try:
         from wafw00f.main import WAFW00F
         attacker = WAFW00F(target_url)
         waf_found = []
 
-        # Coba API v1: identwaf (versi lama)
         if hasattr(attacker, 'identwaf'):
             try:
                 w = attacker.identwaf(findall=True)
@@ -1164,7 +1155,6 @@ def waf_detect_engine(target_url):
             except Exception:
                 pass
 
-        # Coba API v2: identify + getwaf (versi menengah)
         if not waf_found and hasattr(attacker, 'identify'):
             try:
                 attacker.identify()
@@ -1175,7 +1165,6 @@ def waf_detect_engine(target_url):
             except Exception:
                 pass
 
-        # Coba API v3: wafname attribute
         if not waf_found and hasattr(attacker, 'wafname'):
             try:
                 w = attacker.wafname
@@ -1184,7 +1173,6 @@ def waf_detect_engine(target_url):
             except Exception:
                 pass
 
-        # Coba API v4: detectwaf
         if not waf_found and hasattr(attacker, 'detectwaf'):
             try:
                 w = attacker.detectwaf()
@@ -1193,7 +1181,6 @@ def waf_detect_engine(target_url):
             except Exception:
                 pass
 
-        # Filter hasil
         waf_found = [ensure_str(w) for w in waf_found if w and str(w) != 'None' and str(w).strip()]
 
         if waf_found:
@@ -1211,7 +1198,7 @@ def waf_detect_engine(target_url):
     except Exception as e:
         print(f"\033[31m    wafw00f error: {ensure_str(e)[:80]}\033[0m")
 
-    # Method 2: Manual fingerprinting (FULL v4.1 - semua signature)
+    # Method 2: Manual fingerprinting
     print(f"\033[33m[*] [2/2] Manual WAF fingerprinting...\033[0m")
     try:
         session = cloudscraper.create_scraper()
@@ -1268,7 +1255,7 @@ def waf_detect_engine(target_url):
     return results
 
 # ============================================================
-# ENGINE 5: ZAP SCAN (FULL v4.1 + safe_call fix + technology fix)
+# ENGINE 5: ZAP SCAN
 # ============================================================
 def zap_scan(zap, target_url):
     zr = {
@@ -1351,7 +1338,7 @@ def zap_scan(zap, target_url):
     except Exception as e:
         print(f"\033[31m    Passive: {ensure_str(e)[:80]}\033[0m")
 
-    # 4. Active Scan (FULL v4.1 - dengan duplicate check)
+    # 4. Active Scan
     print(f"\033[33m[*] [4/6] Active Scan...\033[0m")
     try:
         scan_id = safe_call(zap.ascan.scan, target_url, recurse=True, inscopeonly=True, fallback=0)
@@ -1361,7 +1348,6 @@ def zap_scan(zap, target_url):
             time.sleep(2)
         print(f"\r    Active: 100% [OK]")
 
-        # Post-active: collect NEW alerts (deduplicate)
         post_alerts = safe_call(zap.core.alerts, baseurl=target_url, fallback=[])
         if isinstance(post_alerts, list):
             for a in post_alerts:
@@ -1389,13 +1375,11 @@ def zap_scan(zap, target_url):
     except Exception as e:
         print(f"\033[31m    Active: {ensure_str(e)[:80]}\033[0m")
 
-    # 5. Tech Detection (FIX: wrap dengan try-except untuk handle 'technology' attribute error)
+    # 5. Tech Detection (FIX: technology attribute)
     print(f"\033[33m[*] [5/6] Tech Detection...\033[0m")
     try:
-        # Coba berbagai method untuk tech detection
         tech_detected = []
         
-        # Method 1: zap.technology (jika ada)
         if hasattr(zap, 'technology'):
             try:
                 t = safe_call(zap.technology.get_all, fallback={})
@@ -1406,14 +1390,12 @@ def zap_scan(zap, target_url):
             except Exception:
                 pass
         
-        # Method 2: Extract dari passive scan alerts
         if not tech_detected:
             for alert in zr["passive_alerts"] + zr["active_alerts"]:
                 alert_name = alert.get("alert", "").lower()
                 if any(tech in alert_name for tech in ["php", "java", "asp.net", "apache", "nginx", "iis"]):
                     tech_detected.append(alert.get("alert", ""))
         
-        # Method 3: Extract dari response headers (akan dilakukan di BS4)
         zr["technologies_detected"] = list(set(tech_detected))[:20]
         print(f"    Techs: {safe_join(zr['technologies_detected'][:10]) or 'detected by BS4 engine'}")
         
@@ -1421,7 +1403,7 @@ def zap_scan(zap, target_url):
         print(f"\033[31m    Tech: {ensure_str(e)[:80]}\033[0m")
         zr["technologies_detected"] = []
 
-    # 6. Misc (FULL v4.1 - sites + messages)
+    # 6. Misc
     print(f"\033[33m[*] [6/6] Misc...\033[0m")
     try:
         sites = safe_call(zap.core.sites, fallback=[])
@@ -1449,7 +1431,7 @@ def zap_scan(zap, target_url):
     return zr
 
 # ============================================================
-# ENGINE 6: BS4 DEEP EXTRACTION (FULL v4.1 - SEMUA fitur)
+# ENGINE 6: BS4 DEEP EXTRACTION
 # ============================================================
 def bs4_deep_extract(scraper, target_url):
     br = {
@@ -1485,7 +1467,7 @@ def bs4_deep_extract(scraper, target_url):
     pt = urlparse(target_url)
     base_url = f"{pt.scheme}://{pt.netloc}"
 
-    # 1. Metadata (FULL v4.1 - Open Graph included)
+    # 1. Metadata
     print(f"\033[33m[*] [1/12] Metadata...\033[0m")
     title = ensure_str(soup.title.string) if soup.title else 'No Title'
     mg = soup.find('meta', attrs={'name': 'generator'})
@@ -1617,7 +1599,7 @@ def bs4_deep_extract(scraper, target_url):
         if any(k in h.lower() for k in ['api', 'swagger', 'graphql']):
             br["api_endpoints"].append({"endpoint": h, "source": "link_tag"})
 
-    # 9. External (FULL v4.1 - iframes included)
+    # 9. External
     print(f"\033[33m[*] [9/12] External Resources...\033[0m")
     es = [s.get('src') for s in soup.find_all('script', src=True)]
     est = [l.get('href') for l in soup.find_all('link', rel='stylesheet')]
@@ -1627,7 +1609,7 @@ def bs4_deep_extract(scraper, target_url):
         "total": len(es) + len(est) + len(ifs)
     }
 
-    # 10. Tech (FULL v4.1 - SEMUA fingerprint)
+    # 10. Tech
     print(f"\033[33m[*] [10/12] Fingerprinting...\033[0m")
     if soup.find('meta', attrs={'name': 'generator', 'content': re.compile(r'WordPress', re.I)}):
         br["technology_fingerprints"].append("CMS: WordPress")
@@ -1652,7 +1634,7 @@ def bs4_deep_extract(scraper, target_url):
     if soup.find('input', attrs={'name': '_token'}):
         br["technology_fingerprints"].append("Backend: Laravel")
 
-    # 11. Path Fuzzing (FULL v4.1 - 28 paths)
+    # 11. Path Fuzzing
     print(f"\033[33m[*] [11/12] Path Fuzzing...\033[0m")
     fuzz = [
         '/.env', '/.git/config', '/.git/HEAD', '/.htaccess', '/robots.txt',
@@ -1705,15 +1687,18 @@ def bs4_deep_extract(scraper, target_url):
     return br, raw_html
 
 # ============================================================
-# SAVE: JSON + TXT (FULL v4.1 + ensure_str fix)
+# SAVE: JSON + TXT
 # ============================================================
 def combine_and_save(target_url, nmap_r, dns_r, ssl_r, waf_r, zap_r, bs4_r, raw_html):
+    # ==========================================================
+    # FIX v4.4: Definisi domain dan ts DI SINI
+    # ==========================================================
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
     domain = urlparse(target_url).netloc.replace('.', '_').replace(':', '_')
 
     combined = {
         "report_info": {
-            "tool": "Indigo-SCR v4.3", "target": target_url,
+            "tool": "Indigo-SCR v4.4", "target": target_url,
             "scan_date": datetime.now().isoformat(),
             "engines": {k: (v["available"] or k == "ssl") for k, v in ENGINE_STATUS.items()},
             "zap_state": ZAP_STATUS["state"], "scan_mode": ZAP_STATUS["scan_mode"]
@@ -1746,16 +1731,16 @@ def combine_and_save(target_url, nmap_r, dns_r, ssl_r, waf_r, zap_r, bs4_r, raw_
         "beautifulsoup_results": bs4_r
     }
 
-    # JSON (FIX: default=ensure_str)
+    # JSON
     jf = f"indigo_scr_{domain}_{ts}.json"
     with open(jf, 'w', encoding='utf-8') as f:
         json.dump(combined, f, indent=2, ensure_ascii=False, default=ensure_str)
 
-    # TXT (FULL v4.1 - SEMUA section)
+    # TXT
     tf = f"indigo_scr_{domain}_{ts}_RAW.txt"
     with open(tf, 'w', encoding='utf-8') as f:
         W = "=" * 78
-        f.write(f"{W}\n  INDIGO-SCR v4.3 - DEEP SCAN RAW REPORT\n{W}\n\n")
+        f.write(f"{W}\n  INDIGO-SCR v4.4 - DEEP SCAN RAW REPORT\n{W}\n\n")
         f.write(f"Target    : {target_url}\n")
         f.write(f"Scan Date : {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
         f.write(f"ZAP State : {ZAP_STATUS['state']} | Mode: {ZAP_STATUS['scan_mode']}\n")
@@ -1784,7 +1769,7 @@ def combine_and_save(target_url, nmap_r, dns_r, ssl_r, waf_r, zap_r, bs4_r, raw_
         else:
             f.write("  No NMAP data\n")
 
-        # DNS (FULL v4.1 - semua record types)
+        # DNS
         f.write(f"\n\n{W}\n>>> DNS - RECONNAISSANCE\n{W}\n\n")
         f.write(f"  Resolved IP : {dns_r.get('resolved_ip', 'N/A')}\n")
         f.write(f"  A Records   : {safe_join(dns_r['a_records'])}\n")
@@ -1810,7 +1795,7 @@ def combine_and_save(target_url, nmap_r, dns_r, ssl_r, waf_r, zap_r, bs4_r, raw_
             for rd in dns_r["reverse_dns"]:
                 f.write(f"    {rd['ip']} -> {rd['ptr']}\n")
 
-        # SSL (FULL v4.1 - SAN + chain)
+        # SSL
         f.write(f"\n\n{W}\n>>> SSL/TLS - CERTIFICATE ANALYSIS\n{W}\n\n")
         if ssl_r["certificate"]:
             f.write(f"  Subject     : {ssl_r['certificate'].get('subject', {})}\n")
@@ -1846,7 +1831,7 @@ def combine_and_save(target_url, nmap_r, dns_r, ssl_r, waf_r, zap_r, bs4_r, raw_
         else:
             f.write("  No WAF detected\n")
 
-        # ZAP (FULL v4.1)
+        # ZAP
         f.write(f"\n\n{W}\n>>> ZAP - VULNERABILITY ALERTS\n{W}\n\n")
         if zap_r.get("active_alerts"):
             f.write("--- HIGH/MEDIUM ---\n\n")
@@ -1867,7 +1852,7 @@ def combine_and_save(target_url, nmap_r, dns_r, ssl_r, waf_r, zap_r, bs4_r, raw_
             for u in all_urls[:100]:
                 f.write(f"  {ensure_str(u)}\n")
 
-        # BS4 (FULL v4.1 - SEMUA section)
+        # BS4
         f.write(f"\n\n{W}\n>>> BS4 - DEEP EXTRACTION\n{W}\n\n")
         ha = bs4_r.get("header_analysis", {})
         f.write("--- HEADERS ---\n")
@@ -1945,9 +1930,10 @@ def combine_and_save(target_url, nmap_r, dns_r, ssl_r, waf_r, zap_r, bs4_r, raw_
         # RAW HTML
         f.write(f"\n\n{W}\n>>> RAW HTML DUMP\n{W}\n\n")
         f.write(raw_html if raw_html else "[No HTML]")
-        f.write(f"\n\n{W}\n>>> END | Indigo-SCR v4.3 | {datetime.now().isoformat()}\n{W}\n")
+        f.write(f"\n\n{W}\n>>> END | Indigo-SCR v4.4 | {datetime.now().isoformat()}\n{W}\n")
 
-    return jf, tf
+    # Return 4 values: json_file, txt_file, domain, ts
+    return jf, tf, domain, ts
 
 # ============================================================
 # MAIN LOOP WITH VULN-BOT INTEGRATION
@@ -1979,7 +1965,7 @@ def main():
 
             print(f"\n\033[32m[+] Target: {formatted}\033[0m")
 
-            # ZAP Connection (FIX: safe_call untuk version)
+            # ZAP Connection
             zap = None
             zap_ok = False
             if ZAPv2 and ZAP_STATUS["state"] == "ONLINE":
@@ -1993,7 +1979,6 @@ def main():
                             },
                             apikey=ZAP_API_KEY
                         )
-                        # FIX: Gunakan safe_call untuk hindari "str not callable"
                         ver = safe_call(zap.core.version, fallback="unknown")
                         print(f"\033[32m[+] ZAP Connected! v{ensure_str(ver)}\033[0m")
                         zap_ok = True
@@ -2053,9 +2038,14 @@ def main():
             # Save
             findings = []
             if raw_html:
-                jf, tf = combine_and_save(formatted, nmap_r, dns_r, ssl_r, waf_r, zap_r, bs4_r, raw_html)
+                # ==========================================================
+                # FIX v4.4: combine_and_save sekarang return 4 values
+                # ==========================================================
+                jf, tf, domain, ts = combine_and_save(
+                    formatted, nmap_r, dns_r, ssl_r, waf_r, zap_r, bs4_r, raw_html
+                )
 
-                # Collect findings for VULN-BOT (FIXED: include vuln_type + confidence)
+                # Collect findings for VULN-BOT
                 
                 # Helper: map ZAP alert name → vuln_type
                 def _zap_alert_to_vuln_type(alert_name):
@@ -2093,7 +2083,6 @@ def main():
                     bs4_r.get("technology_fingerprints", []) + 
                     zap_r.get("technologies_detected", [])
                 ))
-                # Clean tech names
                 clean_techs = []
                 for t in all_techs:
                     t_lower = ensure_str(t).lower()
@@ -2142,7 +2131,6 @@ def main():
                         "technologies": clean_techs,
                         "waf_detected": waf_detected,
                         "failed_payloads": [],
-                        # Legacy fields (backward compat)
                         "type": "vulnerability",
                         "category": "zap",
                         "cwe_id": ensure_str(alert.get("cweid", "")),
@@ -2267,6 +2255,10 @@ def main():
                         vuln_bot_results = run_vuln_bot(findings)
                         
                         if vuln_bot_results:
+                            # ==========================================================
+                            # FIX v4.4: domain dan ts sekarang sudah terdefinisi
+                            # karena dikembalikan dari combine_and_save()
+                            # ==========================================================
                             vbr_file = f"indigo_vuln_bot_{domain}_{ts}.json"
                             with open(vbr_file, 'w', encoding='utf-8') as f:
                                 json.dump(vuln_bot_results, f, indent=2, ensure_ascii=False, default=ensure_str)
@@ -2280,7 +2272,6 @@ def main():
                             print(f"\033[36m[+] Payloads validated: {total_validated}\033[0m")
                             print(f"\033[36m[+] PoC files created: {total_poc}\033[0m")
                             
-                            # Show per-finding breakdown
                             for r in vuln_bot_results:
                                 vt = r['finding'].get('vuln_type', 'unknown')
                                 bp = r.get('best_payload', {})
@@ -2316,7 +2307,7 @@ def main():
 def bootstrap():
     print("\033[91m\033[1m")
     print("  +==========================================================+")
-    print("  |     Indigo-SCR v4.3 - BOOTSTRAP SEQUENCE                |")
+    print("  |     Indigo-SCR v4.4 - BOOTSTRAP SEQUENCE                |")
     print("  |     6 Scanning Engines: NMAP DNS SSL WAF ZAP BS4         |")
     print("  +==========================================================+")
     print("\033[0m")
