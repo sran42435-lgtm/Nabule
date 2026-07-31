@@ -3,6 +3,8 @@
 Indigo SCR v4.3 - Indigo Security Crawler & Reconnaissance
 6 Deep Scanning Engines: NMAP + DNS + SSL + WAF + ZAP + BS4
 v4.1 FULL FEATURES + v4.2 ERROR FIXES + v4.3 VULN-BOT INTEGRATION
+
+CHANGELOG v4.3:
 - ensure_str(): fix tuple/bytes/dict → string
 - safe_join(): fix "sequence item 0: expected str" 
 - safe_call(): fix "'str' object is not callable"
@@ -10,6 +12,8 @@ v4.1 FULL FEATURES + v4.2 ERROR FIXES + v4.3 VULN-BOT INTEGRATION
 - DNS resolve_dns(): fix unhandled DNS exceptions
 - json.dump default=ensure_str: fix serialization
 - VULN-BOT integration: AI payload generation after scan
+- FIX: ZAPv2 object has no attribute 'technology' error
+- NEW ASCII ART BANNER
 """
 
 import os
@@ -26,6 +30,7 @@ import shutil
 import platform
 from datetime import datetime
 from urllib.parse import urlparse, urljoin
+from collections import Counter
 
 # ============================================================
 # ENCODING FIX
@@ -1263,7 +1268,7 @@ def waf_detect_engine(target_url):
     return results
 
 # ============================================================
-# ENGINE 5: ZAP SCAN (FULL v4.1 + safe_call fix)
+# ENGINE 5: ZAP SCAN (FULL v4.1 + safe_call fix + technology fix)
 # ============================================================
 def zap_scan(zap, target_url):
     zr = {
@@ -1384,17 +1389,37 @@ def zap_scan(zap, target_url):
     except Exception as e:
         print(f"\033[31m    Active: {ensure_str(e)[:80]}\033[0m")
 
-    # 5. Tech
+    # 5. Tech Detection (FIX: wrap dengan try-except untuk handle 'technology' attribute error)
     print(f"\033[33m[*] [5/6] Tech Detection...\033[0m")
     try:
-        t = safe_call(zap.technology.get_all, fallback={})
-        if isinstance(t, dict):
-            zr["technologies_detected"] = [ensure_str(x) for x in t.get('technology', [])]
-        elif isinstance(t, list):
-            zr["technologies_detected"] = [ensure_str(x) for x in t]
-        print(f"    Techs: {safe_join(zr['technologies_detected'][:10]) or 'none'}")
+        # Coba berbagai method untuk tech detection
+        tech_detected = []
+        
+        # Method 1: zap.technology (jika ada)
+        if hasattr(zap, 'technology'):
+            try:
+                t = safe_call(zap.technology.get_all, fallback={})
+                if isinstance(t, dict):
+                    tech_detected = [ensure_str(x) for x in t.get('technology', [])]
+                elif isinstance(t, list):
+                    tech_detected = [ensure_str(x) for x in t]
+            except Exception:
+                pass
+        
+        # Method 2: Extract dari passive scan alerts
+        if not tech_detected:
+            for alert in zr["passive_alerts"] + zr["active_alerts"]:
+                alert_name = alert.get("alert", "").lower()
+                if any(tech in alert_name for tech in ["php", "java", "asp.net", "apache", "nginx", "iis"]):
+                    tech_detected.append(alert.get("alert", ""))
+        
+        # Method 3: Extract dari response headers (akan dilakukan di BS4)
+        zr["technologies_detected"] = list(set(tech_detected))[:20]
+        print(f"    Techs: {safe_join(zr['technologies_detected'][:10]) or 'detected by BS4 engine'}")
+        
     except Exception as e:
         print(f"\033[31m    Tech: {ensure_str(e)[:80]}\033[0m")
+        zr["technologies_detected"] = []
 
     # 6. Misc (FULL v4.1 - sites + messages)
     print(f"\033[33m[*] [6/6] Misc...\033[0m")
@@ -2030,88 +2055,186 @@ def main():
             if raw_html:
                 jf, tf = combine_and_save(formatted, nmap_r, dns_r, ssl_r, waf_r, zap_r, bs4_r, raw_html)
 
-                # Collect findings for VULN-BOT
-                # ZAP findings
+                # Collect findings for VULN-BOT (FIXED: include vuln_type + confidence)
+                
+                # Helper: map ZAP alert name → vuln_type
+                def _zap_alert_to_vuln_type(alert_name):
+                    name_lower = alert_name.lower()
+                    if any(k in name_lower for k in ["cross site scripting", "xss"]):
+                        return "xss"
+                    elif any(k in name_lower for k in ["sql injection", "sqli"]):
+                        return "sqli"
+                    elif any(k in name_lower for k in ["remote code", "command injection", "rce"]):
+                        return "rce"
+                    elif any(k in name_lower for k in ["local file", "path traversal", "lfi"]):
+                        return "lfi"
+                    elif any(k in name_lower for k in ["ssrf", "server side request"]):
+                        return "ssrf"
+                    elif any(k in name_lower for k in ["template injection", "ssti"]):
+                        return "ssti"
+                    elif any(k in name_lower for k in ["xxe", "xml external"]):
+                        return "xxe"
+                    elif any(k in name_lower for k in ["crlf", "header injection"]):
+                        return "crlf"
+                    elif any(k in name_lower for k in ["redirect"]):
+                        return "open_redirect"
+                    elif any(k in name_lower for k in ["idor", "insecure direct"]):
+                        return "idor"
+                    elif any(k in name_lower for k in ["csrf"]):
+                        return "csrf"
+                    return "unknown"
+                
+                # Helper: map severity → confidence
+                def _severity_to_confidence(severity):
+                    return {"High": 0.85, "Medium": 0.75, "Low": 0.60, "Informational": 0.40}.get(severity, 0.70)
+                
+                # Collect technologies
+                all_techs = list(set(
+                    bs4_r.get("technology_fingerprints", []) + 
+                    zap_r.get("technologies_detected", [])
+                ))
+                # Clean tech names
+                clean_techs = []
+                for t in all_techs:
+                    t_lower = ensure_str(t).lower()
+                    if "mysql" in t_lower: clean_techs.append("mysql")
+                    if "postgresql" in t_lower or "postgres" in t_lower: clean_techs.append("postgresql")
+                    if "mssql" in t_lower or "sql server" in t_lower: clean_techs.append("mssql")
+                    if "php" in t_lower: clean_techs.append("php")
+                    if "java" in t_lower or "jsp" in t_lower: clean_techs.append("java")
+                    if "python" in t_lower or "django" in t_lower or "flask" in t_lower: clean_techs.append("python")
+                    if "asp.net" in t_lower or "iis" in t_lower: clean_techs.append("asp.net")
+                    if "node" in t_lower or "express" in t_lower: clean_techs.append("nodejs")
+                    if "apache" in t_lower: clean_techs.append("apache")
+                    if "nginx" in t_lower: clean_techs.append("nginx")
+                    if "laravel" in t_lower: clean_techs.append("laravel")
+                    if "wordpress" in t_lower: clean_techs.append("wordpress")
+                    if "jquery" in t_lower: clean_techs.append("jquery")
+                    if "react" in t_lower: clean_techs.append("react")
+                    if "vue" in t_lower: clean_techs.append("vue")
+                    if "struts" in t_lower: clean_techs.append("struts")
+                    if "log4j" in t_lower: clean_techs.append("log4j")
+                    if "confluence" in t_lower: clean_techs.append("confluence")
+                clean_techs = list(set(clean_techs))
+                
+                waf_detected = waf_r.get("waf_detected", False)
+                
+                # ZAP findings → VULN-BOT format
                 for alert in zap_r.get("active_alerts", []):
+                    alert_name = ensure_str(alert.get("alert", "Unknown"))
+                    vuln_type = _zap_alert_to_vuln_type(alert_name)
+                    severity = ensure_str(alert.get("risk", "Medium"))
+                    
                     finding = {
+                        "vuln_type": vuln_type,
+                        "name": alert_name,
+                        "severity": severity,
+                        "confidence": _severity_to_confidence(severity),
+                        "url": ensure_str(alert.get("url", formatted)),
+                        "evidence": ensure_str(alert.get("evidence", "")),
+                        "description": ensure_str(alert.get("description", "")),
+                        "solution": ensure_str(alert.get("solution", "")),
+                        "cve_id": "",
+                        "context": {
+                            "parameter": ensure_str(alert.get("param", "")),
+                            "param_type": "url",
+                        },
+                        "technologies": clean_techs,
+                        "waf_detected": waf_detected,
+                        "failed_payloads": [],
+                        # Legacy fields (backward compat)
                         "type": "vulnerability",
                         "category": "zap",
-                        "name": alert.get("alert", "Unknown"),
-                        "severity": alert.get("risk", "Medium"),
-                        "url": alert.get("url", formatted),
-                        "parameter": alert.get("param", ""),
-                        "evidence": alert.get("evidence", ""),
-                        "description": alert.get("description", ""),
-                        "solution": alert.get("solution", ""),
-                        "cwe_id": alert.get("cweid", ""),
-                        "wasc_id": alert.get("wascid", "")
+                        "cwe_id": ensure_str(alert.get("cweid", "")),
+                        "wasc_id": ensure_str(alert.get("wascid", "")),
                     }
                     findings.append(finding)
 
                 # SSL findings
                 for vuln in ssl_r.get("vulnerabilities", []):
                     finding = {
-                        "type": "vulnerability", 
-                        "category": "ssl",
-                        "name": vuln.get("issue", "SSL Issue"),
-                        "severity": vuln.get("severity", "Medium"),
+                        "vuln_type": "ssrf",
+                        "name": ensure_str(vuln.get("issue", "SSL Issue")),
+                        "severity": ensure_str(vuln.get("severity", "Medium")),
+                        "confidence": 0.70,
                         "url": formatted,
-                        "parameter": "",
-                        "evidence": vuln.get("detail", ""),
-                        "description": f"SSL/TLS vulnerability detected",
+                        "evidence": ensure_str(vuln.get("detail", "")),
+                        "description": "SSL/TLS vulnerability detected",
                         "solution": "Update SSL configuration",
-                        "cwe_id": "",
-                        "wasc_id": ""
+                        "cve_id": "",
+                        "context": {"parameter": "", "param_type": "url"},
+                        "technologies": clean_techs,
+                        "waf_detected": waf_detected,
+                        "failed_payloads": [],
+                        "type": "vulnerability",
+                        "category": "ssl",
                     }
                     findings.append(finding)
 
                 # BS4 sensitive findings
                 for comment in bs4_r.get("sensitive_comments", []):
                     finding = {
-                        "type": "sensitive_data",
-                        "category": "bs4",
+                        "vuln_type": "xss",
                         "name": "Sensitive HTML Comment",
                         "severity": "Medium",
+                        "confidence": 0.65,
                         "url": formatted,
-                        "parameter": "",
-                        "evidence": comment.get("content", "")[:100],
-                        "description": comment.get("risk", ""),
+                        "evidence": ensure_str(comment.get("content", ""))[:100],
+                        "description": ensure_str(comment.get("risk", "")),
                         "solution": "Remove sensitive comments from HTML",
+                        "cve_id": "",
+                        "context": {"parameter": "", "param_type": "url"},
+                        "technologies": clean_techs,
+                        "waf_detected": waf_detected,
+                        "failed_payloads": [],
+                        "type": "sensitive_data",
+                        "category": "bs4",
                         "cwe_id": "CWE-200",
-                        "wasc_id": ""
                     }
                     findings.append(finding)
 
                 for js_secret in bs4_r.get("javascript_variables", []):
                     finding = {
-                        "type": "sensitive_data",
-                        "category": "bs4",
+                        "vuln_type": "xss",
                         "name": "JavaScript Credential Exposure",
                         "severity": "High",
+                        "confidence": 0.80,
                         "url": formatted,
-                        "parameter": js_secret.get("variable", ""),
-                        "evidence": f"{js_secret.get('variable', '')} = {js_secret.get('value', '')}",
+                        "evidence": f"{ensure_str(js_secret.get('variable', ''))} = {ensure_str(js_secret.get('value', ''))}",
                         "description": "Credentials exposed in JavaScript",
                         "solution": "Move credentials to secure backend storage",
+                        "cve_id": "",
+                        "context": {"parameter": ensure_str(js_secret.get("variable", "")), "param_type": "url"},
+                        "technologies": clean_techs,
+                        "waf_detected": waf_detected,
+                        "failed_payloads": [],
+                        "type": "sensitive_data",
+                        "category": "bs4",
                         "cwe_id": "CWE-798",
-                        "wasc_id": ""
                     }
                     findings.append(finding)
 
                 for path_result in bs4_r.get("path_fuzzing_results", []):
                     if path_result.get("status_code") == 200:
+                        path = ensure_str(path_result.get('path', ''))
+                        is_critical = any(x in path for x in ['.env', '.git', 'backup', 'config', 'phpinfo'])
                         finding = {
+                            "vuln_type": "lfi",
+                            "name": f"Exposed Path: {path}",
+                            "severity": "High" if is_critical else "Medium",
+                            "confidence": 0.80 if is_critical else 0.65,
+                            "url": f"{formatted.rstrip('/')}{path}",
+                            "evidence": f"Status: {path_result.get('status_code')}, Size: {path_result.get('content_length', 0)}",
+                            "description": "Sensitive path accessible",
+                            "solution": "Restrict access to sensitive paths",
+                            "cve_id": "",
+                            "context": {"parameter": "", "param_type": "url"},
+                            "technologies": clean_techs,
+                            "waf_detected": waf_detected,
+                            "failed_payloads": [],
                             "type": "information_disclosure",
                             "category": "bs4",
-                            "name": f"Exposed Path: {path_result.get('path', '')}",
-                            "severity": "High" if any(x in path_result.get('path', '') for x in ['.env', '.git', 'backup', 'config']) else "Medium",
-                            "url": f"{formatted.rstrip('/')}{path_result.get('path', '')}",
-                            "parameter": "",
-                            "evidence": f"Status: {path_result.get('status_code')}, Size: {path_result.get('content_length', 0)}",
-                            "description": f"Sensitive path accessible",
-                            "solution": "Restrict access to sensitive paths",
                             "cwe_id": "CWE-200",
-                            "wasc_id": ""
                         }
                         findings.append(finding)
 
@@ -2129,8 +2252,12 @@ def main():
                 print(f"  \033[36m|- ZAP   : {zap_r.get('scan_statistics', {}).get('total_alerts', 0)} alerts\033[0m")
                 print(f"  \033[36m|- BS4   : {bs4_r.get('raw_data_stats', {}).get('sensitive_comments', 0)} sensitive items\033[0m")
                 
-                # Ask user if they want to run VULN-BOT
-                print(f"\n\033[33m[?] Total findings collected: {len(findings)} vulnerabilities/sensitive items\033[0m")
+                # Show findings breakdown
+                vuln_type_counts = Counter(f.get("vuln_type", "unknown") for f in findings)
+                print(f"\n  \033[33m[?] Total findings: {len(findings)}\033[0m")
+                for vt, count in sorted(vuln_type_counts.items(), key=lambda x: -x[1]):
+                    print(f"      {vt}: {count}")
+                
                 confirm = input(f"\n\033[32m[Lanjut ke VULN-BOT AI Payload Generation? (y/n): \033[0m").strip().lower()
                 
                 if confirm == 'y':
@@ -2139,18 +2266,27 @@ def main():
                         print(f"\n\033[36m[*] Starting VULN-BOT AI Payload Generation...\033[0m")
                         vuln_bot_results = run_vuln_bot(findings)
                         
-                        # Save VULN-BOT results
                         if vuln_bot_results:
                             vbr_file = f"indigo_vuln_bot_{domain}_{ts}.json"
                             with open(vbr_file, 'w', encoding='utf-8') as f:
                                 json.dump(vuln_bot_results, f, indent=2, ensure_ascii=False, default=ensure_str)
                             print(f"\n\033[32m[+] VULN-BOT results saved to: {vbr_file}\033[0m")
                             
-                            # Summary
-                            total_payloads = sum(len(result.get('generated_payloads', [])) for result in vuln_bot_results)
-                            successful_tests = sum(1 for result in vuln_bot_results if result.get('exploit_success', False))
-                            print(f"\033[36m[+] Generated {total_payloads} AI payloads\033[0m")
-                            print(f"\033[36m[+] {successful_tests} successful exploit attempts\033[0m")
+                            total_payloads = sum(r.get('payloads_generated', 0) for r in vuln_bot_results)
+                            total_validated = sum(r.get('payloads_validated', 0) for r in vuln_bot_results)
+                            total_poc = sum(len(r.get('poc_files', [])) for r in vuln_bot_results)
+                            
+                            print(f"\033[36m[+] Total AI payloads generated: {total_payloads}\033[0m")
+                            print(f"\033[36m[+] Payloads validated: {total_validated}\033[0m")
+                            print(f"\033[36m[+] PoC files created: {total_poc}\033[0m")
+                            
+                            # Show per-finding breakdown
+                            for r in vuln_bot_results:
+                                vt = r['finding'].get('vuln_type', 'unknown')
+                                bp = r.get('best_payload', {})
+                                print(f"\033[36m  [{vt.upper()}] {r['payloads_generated']} payloads | "
+                                      f"Best: {bp.get('method', 'N/A')} | "
+                                      f"Score: {bp.get('context_score', 0):.2f}\033[0m")
                         else:
                             print(f"\033[33m[!] VULN-BOT returned no results\033[0m")
                     except ImportError:
