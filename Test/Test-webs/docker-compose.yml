@@ -1,0 +1,37 @@
+version: '3.8'
+
+services:
+  web:
+    image: php:8.2-apache
+    container_name: sql-test-web
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./:/var/www/html/
+    networks:
+      - sql-test-net
+    depends_on:
+      - db
+    command: >
+      bash -c "docker-php-ext-install mysqli &&
+               a2enmod rewrite &&
+               apache2-foreground"
+
+  db:
+    image: mysql:8.0
+    container_name: sql-test-db
+    environment:
+      MYSQL_ROOT_PASSWORD: ""
+      MYSQL_ALLOW_EMPTY_PASSWORD: "yes"
+      MYSQL_DATABASE: testing_db
+    ports:
+      - "3306:3306"
+    volumes:
+      - ./setup.sql:/docker-entrypoint-initdb.d/setup.sql
+    networks:
+      - sql-test-net
+
+networks:
+  sql-test-net:
+    driver: bridge
