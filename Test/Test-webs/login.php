@@ -1,5 +1,5 @@
 <?php
-// KONEKSI DATABASE (Rentan)
+// ========== KONEKSI DATABASE ==========
 $host = "localhost";
 $user = "root";
 $pass = "";
@@ -7,32 +7,29 @@ $db = "testing_db";
 
 $conn = mysqli_connect($host, $user, $pass, $db);
 
-// CEK KONEKSI
 if (!$conn) {
     die("Koneksi gagal: " . mysqli_connect_error());
 }
 
-// ⚠️ KERENTANAN SQL INJECTION - TANPA PARAMETERIZED QUERY
+// ========== PROSES LOGIN (RENTAN SQL INJECTION) ==========
+$login_status = "";
+$login_message = "";
+
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
     $username = $_POST['username'];
     $password = $_POST['password'];
     
-    // ⚠️ RENTAN: Langsung memasukkan input user ke query
+    // ⚠️ KERENTANAN: SQL Injection
     $sql = "SELECT * FROM users WHERE username='$username' AND password='$password'";
     $result = mysqli_query($conn, $sql);
     
     if (mysqli_num_rows($result) > 0) {
         $row = mysqli_fetch_assoc($result);
-        echo "<div style='background: #4CAF50; color: white; padding: 20px; text-align: center;'>
-                <h2>✅ LOGIN BERHASIL!</h2>
-                <p>Selamat datang, " . $row['username'] . "!</p>
-                <p>Role: " . $row['role'] . "</p>
-              </div>";
+        $login_status = "success";
+        $login_message = "Selamat datang, " . $row['username'] . "! (Role: " . $row['role'] . ")";
     } else {
-        echo "<div style='background: #f44336; color: white; padding: 20px; text-align: center;'>
-                <h2>❌ LOGIN GAGAL!</h2>
-                <p>Username atau password salah!</p>
-              </div>";
+        $login_status = "failed";
+        $login_message = "Username atau password salah!";
     }
 }
 ?>
@@ -42,7 +39,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Login Admin - Testing SQL Injection</title>
+    <title>Login Admin - SQL Injection Test</title>
     <style>
         * {
             margin: 0;
@@ -52,7 +49,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
             min-height: 100vh;
             display: flex;
             justify-content: center;
@@ -63,7 +60,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         .container {
             background: white;
             border-radius: 20px;
-            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            box-shadow: 0 20px 60px rgba(0,0,0,0.5);
             padding: 40px;
             width: 100%;
             max-width: 450px;
@@ -100,6 +97,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             border-radius: 20px;
             display: inline-block;
             margin-top: 10px;
+            font-weight: bold;
         }
         
         .warning-box {
@@ -168,16 +166,34 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             transform: translateY(0);
         }
         
+        .status-message {
+            margin-bottom: 20px;
+        }
+        
+        .alert {
+            padding: 15px;
+            border-radius: 10px;
+            text-align: center;
+            font-weight: 600;
+        }
+        
+        .alert-success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        
+        .alert-danger {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        
         .footer {
             margin-top: 25px;
             text-align: center;
             font-size: 12px;
             color: #999;
-        }
-        
-        .footer a {
-            color: #667eea;
-            text-decoration: none;
         }
         
         .payload-examples {
@@ -208,10 +224,6 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             color: #66d9ef;
         }
         
-        .status-message {
-            margin-bottom: 20px;
-        }
-        
         .demo-cred {
             background: #e8f5e9;
             padding: 12px;
@@ -219,6 +231,22 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             margin-top: 15px;
             font-size: 13px;
             color: #2e7d32;
+        }
+        
+        .demo-cred code {
+            background: #c8e6c9;
+            padding: 2px 8px;
+            border-radius: 4px;
+        }
+        
+        .ip-info {
+            background: #e3f2fd;
+            padding: 10px;
+            border-radius: 8px;
+            margin-top: 15px;
+            font-size: 13px;
+            color: #0d47a1;
+            text-align: center;
         }
     </style>
 </head>
@@ -240,11 +268,11 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         
         <!-- STATUS LOGIN -->
         <div class="status-message">
-            <?php
-            if ($_SERVER["REQUEST_METHOD"] == "POST") {
-                // Pesan error/berhasil sudah ditampilkan di atas
-            }
-            ?>
+            <?php if ($_SERVER["REQUEST_METHOD"] == "POST"): ?>
+                <div class="alert alert-<?php echo $login_status == 'success' ? 'success' : 'danger'; ?>">
+                    <?php echo $login_message; ?>
+                </div>
+            <?php endif; ?>
         </div>
         
         <!-- FORM LOGIN -->
@@ -265,16 +293,21 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         <!-- DEMO CREDENTIALS -->
         <div class="demo-cred">
             <strong>📝 Data Demo:</strong><br>
-            Username: <code style="background: #c8e6c9; padding: 2px 8px; border-radius: 4px;">admin</code> 
-            Password: <code style="background: #c8e6c9; padding: 2px 8px; border-radius: 4px;">admin123</code>
+            Username: <code>admin</code> | Password: <code>admin123</code>
         </div>
         
         <!-- PAYLOAD EXAMPLES -->
         <div class="payload-examples">
-            <h4>⚡ Contoh Payload SQL Injection (Testing):</h4>
+            <h4>⚡ Contoh Payload SQL Injection:</h4>
             <code><span>Username:</span> ' OR '1'='1' -- </code>
             <code><span>Username:</span> admin' -- </code>
-            <code><span>Username:</span> ' UNION SELECT 1,2,3 -- </code>
+            <code><span>Username:</span> ' UNION SELECT 1,2,3,4 -- </code>
+        </div>
+        
+        <!-- IP INFO -->
+        <div class="ip-info">
+            🌐 Akses via: <strong><?php echo $_SERVER['SERVER_ADDR']; ?></strong> 
+            (Port: <?php echo $_SERVER['SERVER_PORT']; ?>)
         </div>
         
         <div class="footer">
