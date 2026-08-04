@@ -4951,22 +4951,8 @@ if __name__ == "__main__":
     try:
         interactive_main()
     except KeyboardInterrupt:
-        print(f"\n\n\033[31m[*]\033[0m Interrupted."); sys.exit(0)
-    except Exception as e:
-        print(f"\n\033[31m[FATAL]\033[0m {e}")
-        traceback.print_exc()
-        sys.exit(1)e=max_mode)
-        print(f"\n  \033[32m[+]\033[0m Report: {txt_path}")
-        print(f"          {json_path}")
-
-        pipeline.injector.close()
-
-
-if __name__ == "__main__":
-    try:
-        interactive_main()
-    except KeyboardInterrupt:
-        print(f"\n\n\033[31m[*]\033[0m Interrupted."); sys.exit(0)
+        print(f"\n\n\033[31m[*]\033[0m Interrupted.")
+        sys.exit(0)
     except Exception as e:
         print(f"\n\033[31m[FATAL]\033[0m {e}")
         traceback.print_exc()
