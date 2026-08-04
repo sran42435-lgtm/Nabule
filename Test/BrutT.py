@@ -2412,28 +2412,8 @@ class GeneticEvolver:
             pass
         return candidates
 
-        # v6.1 NEW: Reference to LSTM (will be injected from Pipeline)
-        self.lstm_generator = None
+    def initialize_population
 
-    def generate_lstm_candidates(self, num_candidates: int = 10) -> List[Dict]:
-        """Generate new payload candidates using the trained LSTM model."""
-        if not self.lstm_generator or not getattr(self.lstm_generator, 'is_trained', False):
-            return []
-        
-        candidates = []
-        try:
-            # Generate raw payloads from LSTM
-            generated_payloads = self.lstm_generator.generate(num_samples=num_candidates)
-            for payload in generated_payloads:
-                # Clean up and validate payload
-                payload = payload.strip()
-                if not payload or len(payload) < 3:
-                    continue
-                
-                candidates.append({
-                    "payload": payload,
-                    "category": "lstm_generated",
-                    "generation": self.generation + 1,
                     "mutation_history": ["lstm_synthesis"],
                     "hash": hash(payload)
                 })
@@ -2557,7 +2537,8 @@ class GeneticEvolver:
             "control_char_insert": lambda s: self.waf_bypass.insert_control_chars(s, 0.05),
             "waf_fragment": lambda s: self.waf_bypass.fragment_signature(s, category),
         }
-                available = {k: v for k, v in all_mutations.items() if k not in blocked}
+        available = {k: v for k, v in all_mutations.items() if k not in blocked}
+
         if not available:
             available = all_mutations
 
@@ -4400,6 +4381,7 @@ class BRUTPipeline:
             if max_mode and found_success: break
             for payload_dict in self.payloads:
                 tested += 1
+                payload = payload_dict.get("payload", "")
                 result = self.injector.inject(param, payload_dict)
 
                 if result:
@@ -4590,6 +4572,10 @@ class BRUTPipeline:
             for m in bandit_stats['top_mutations']:
                 print(f"      • {m['mutation']}: {m['success_rate']:.1%} "
                       f"({m['successes']}/{m['attempts']})")
+
+        # === v6.1 FINAL: Finish phase3 ===
+        return self._finish_phase3()
+
     def generate_advanced_report(self) -> Dict:
         """Generate comprehensive attack report with metrics and export to JSON."""
         import json
@@ -4732,8 +4718,10 @@ class BRUTPipeline:
         
         return report
 
+    def _finish_phase3(self):
+        """Called at the end of phase3_inject to generate report and return results."""
         print(f"\033[33m{'─'*100}\033[0m")
-                        # === v6.1 FINAL: Generate Advanced Report ===
+        # === v6.1 FINAL: Generate Advanced Report ===
         try:
             self.generate_advanced_report()
         except Exception as e:
@@ -4741,7 +4729,6 @@ class BRUTPipeline:
         
         print(f"\033[33m{'─'*100}\033[0m")
         return self.results
-
 
     def phase3_advanced_retry(self):
         failed = [r for r in self.results if r.response_type in ["raw_html", "blocked"]]
