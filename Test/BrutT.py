@@ -2415,15 +2415,27 @@ class GeneticEvolver:
         except Exception:
             pass
         return candidates
-
-    def initialize_population
-
+    def generate_lstm_candidates(self, num_candidates: int = 10) -> List[Dict]:
+        """Generate new payload candidates using the trained LSTM model."""
+        if not self.lstm_generator or not getattr(self.lstm_generator, 'is_trained', False):
+            return []
+        
+        candidates = []
+        try:
+            generated_payloads = self.lstm_generator.generate(num_samples=num_candidates)
+            for payload in generated_payloads:
+                payload = payload.strip()
+                if not payload or len(payload) < 3:
+                    continue
+                candidates.append({
+                    "payload": payload,
+                    "category": "lstm_generated",
+                    "generation": self.generation + 1,
                     "mutation_history": ["lstm_synthesis"],
                     "hash": hash(payload)
                 })
         except Exception:
-            pass # Silently fail if LSTM generation errors out
-            
+            pass
         return candidates
 
     def initialize_population(self, payloads: List[Dict]):
