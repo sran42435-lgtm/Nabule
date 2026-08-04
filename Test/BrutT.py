@@ -2386,6 +2386,10 @@ class GeneticEvolver:
         self.population: List[Dict] = []
         self.generation = 0
         self.elitism_rate = 0.15
+        self.max_population = 200
+        self.tournament_size = 5
+        self.crossover_rate = 0.4
+        self.mutation_rate = 0.3
         # v6.1 NEW: Reference to LSTM (will be injected from Pipeline)
         self.lstm_generator = None
 
@@ -4925,6 +4929,21 @@ def interactive_main():
 
         txt_path, json_path = pipeline.phase4_save()
         pipeline.print_summary()
+        print(f"\n  \033[32m[+]\033[0m Report: {txt_path}")
+        print(f"          {json_path}")
+
+        pipeline.injector.close()
+
+
+if __name__ == "__main__":
+    try:
+        interactive_main()
+    except KeyboardInterrupt:
+        print(f"\n\n\033[31m[*]\033[0m Interrupted."); sys.exit(0)
+    except Exception as e:
+        print(f"\n\033[31m[FATAL]\033[0m {e}")
+        traceback.print_exc()
+        sys.exit(1)e=max_mode)
         print(f"\n  \033[32m[+]\033[0m Report: {txt_path}")
         print(f"          {json_path}")
 
